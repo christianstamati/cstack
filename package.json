@@ -1,32 +1,32 @@
 {
   "name": "cstack",
-  "version": "0.0.1",
+  "version": "0.0.0",
   "private": true,
-  "scripts": {
-    "build": "turbo build",
-    "dev": "turbo dev",
-    "lint": "turbo lint",
-    "format": "turbo format",
-    "typecheck": "turbo typecheck"
-  },
-  "devDependencies": {
-    "prettier": "^3.8.3",
-    "prettier-plugin-tailwindcss": "^0.8.0",
-    "turbo": "^2.9.18",
-    "typescript": "^6"
-  },
+  "type": "module",
   "packageManager": "bun@1.4.2",
-  "engines": {
-    "node": ">=20"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild",
-      "lightningcss"
-    ]
-  },
   "workspaces": [
     "apps/*",
-    "packages/*"
-  ]
+    "packages/*",
+    "cli"
+  ],
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "typecheck": "turbo typecheck",
+    "test": "turbo test",
+    "check": "biome check .",
+    "check:fix": "biome check --write .",
+    "ci": "biome ci . && turbo typecheck test",
+    "ui:add": "cd apps/web && bunx shadcn@latest add",
+    "prepare": "git rev-parse --git-dir >/dev/null 2>&1 || exit 0; lefthook install"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.14",
+    "lefthook": "^2.1.14",
+    "turbo": "^2.11.3",
+    "typescript": "^7.0.2"
+  },
+  "engines": {
+    "node": ">=22"
+  }
 }

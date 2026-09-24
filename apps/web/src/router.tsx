@@ -1,14 +1,48 @@
-import { createRouter as createTanStackRouter } from "@tanstack/react-router"
+import { ConvexAuthProvider } from "@convex-dev/auth/react"
+import { ConvexQueryClient } from "@convex-dev/react-query"
+import { QueryClient } from "@tanstack/react-query"
+import { createRouter } from "@tanstack/react-router"
+import { setupRouterSsrQueryIntegration } from "@tanstack/react-router-ssr-query"
+import { api } from "@workspace/backend/api"
 import { routeTree } from "./routeTree.gen"
 
 export function getRouter() {
-  const router = createTanStackRouter({
-    routeTree,
+  const convexUrl = import.meta.env.VITE_CONVEX_URL
+  if (!convexUrl) {
+    throw new Error(
+      "VITE_CONVEX_URL is not set. Run `bun dev` from the repo root so Convex can write packages/backend/.env.local."
+    )
+  }
 
-    scrollRestoration: true,
-    defaultPreload: "intent",
-    defaultPreloadStaleTime: 0,
+  // TanStack Query drives all data fetching. The Convex adapter turns every
+  // `convexQuery(...)` into a live subscription that pushes updates into the
+  // query cache.
+  const convexQueryClient = new ConvexQueryClient(convexUrl)
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        queryKeyHashFn: convexQueryClient.hashFn(),
+        queryFn: convexQueryClient.queryFn(),
+      },
+    },
   })
+  convexQueryClient.connect(queryClient)
+
+  const router = createRouter({
+    routeTree,
+    context: { queryClient },
+    defaultPreload: "intent",
+    scrollRestoration: true,
+    Wrap: ({ children }) => (
+      <ConvexAuthProvider
+        client={convexQueryClient.convexClient}
+        api={api.auth}
+      >
+        {children}
+      </ConvexAuthProvider>
+    ),
+  })
+  setupRouterSsrQueryIntegration({ router, queryClient })
 
   return router
 }

@@ -1,18 +1,21 @@
+# dependencies
 node_modules
-.DS_Store
-dist
-dist-ssr
-*.local
+
+# env files (examples are committed)
 .env*
-.tanstack
-.wrangler
+!.env.example
+
+# build output
+dist
 .output
+.vercel
+.nitro
+.tanstack
 .vinxi
-__unconfig*
-todos.json
+coverage
 
-# turbo
+# tooling
 .turbo
-
-# typescript
 *.tsbuildinfo
+.DS_Store
+*.local
