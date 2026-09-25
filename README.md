@@ -6,12 +6,13 @@
 cstack is a template for full-stack TypeScript apps, plus a CLI that turns it
 into a new project. The template is a small working app: Google sign-in, a
 task list that updates live across tabs, email through Resend, tests and CI.
-`cstack new my-app` copies it, creates the Convex project, the GitHub repo and
-the Vercel project, and pushes. The first production deploy starts before the
-command exits.
+`bunx github:christianstamati/cstack my-app` copies it, creates the Convex
+project, the GitHub repo and the Vercel project, and pushes. The first
+production deploy starts before the command exits.
 
-The task list is an example. Delete `convex/tasks.ts`, the `tasks` table and
-the dashboard page when a real project starts.
+The task list is an example. Delete `convex/tasks.ts`, the `tasks` table,
+`apps/web/src/components/tasks` and the dashboard page when a real project
+starts.
 
 - `apps/web` the TanStack Start app, deployed to Vercel
 - `packages/backend` Convex schema, functions and their tests
@@ -32,6 +33,7 @@ the dashboard page when a real project starts.
 | UI | [shadcn/ui](https://ui.shadcn.com) on [Base UI](https://base-ui.com) with Tailwind CSS 4 |
 | Tests | [Vitest](https://vitest.dev) and [convex-test](https://docs.convex.dev/testing/convex-test) |
 | Lint and format | [Biome](https://biomejs.dev), run on staged files by [lefthook](https://github.com/evilmartians/lefthook) before each commit |
+| Design system | [@shadcn/lint](https://github.com/shadcn-ui/lint) through [Oxlint](https://oxc.rs). Components are styled through their variants, colors come from theme tokens, sizes from the scale |
 | Dependencies | [Renovate](https://docs.renovatebot.com), grouped weekly PRs. Stable minor and patch updates merge once CI passes |
 
 Convex Auth v2 has no written docs yet. The
@@ -46,11 +48,11 @@ under you.
 | [Bun](https://bun.sh) | 1.4 or later | Everything |
 | [Node](https://nodejs.org) | 22 or later | Vite and the Convex CLI run on it |
 | Convex account | | Dev and production deployments. Log in with `bunx convex login` |
-| [GitHub CLI](https://cli.github.com) | logged in | `cstack new` creates the repo |
-| [Vercel CLI](https://vercel.com/docs/cli) | logged in | `cstack new` creates the Vercel project |
+| [GitHub CLI](https://cli.github.com) | logged in | The CLI creates the repo |
+| [Vercel CLI](https://vercel.com/docs/cli) | logged in | The CLI creates the Vercel project |
 
-Turborepo, Biome and lefthook are dev dependencies, so `bun install` brings
-them. It also installs the git hooks.
+Turborepo, Biome, Oxlint and lefthook are dev dependencies, so `bun install`
+brings them. It also installs the git hooks.
 
 ## Quick start
 
@@ -75,30 +77,32 @@ bunx convex dev --once --configure existing --project cstack
 | `bun run test` | Backend tests |
 | `bun run typecheck` | `tsc` in every package |
 | `bun run check` | Biome lint and format check. `check:fix` applies the fixes |
-| `bun run ci` | What CI runs: Biome, typecheck and tests |
+| `bun run lint` | Design-system rules (@shadcn/lint) |
+| `bun run ci` | What CI runs: Biome, design-system rules, typecheck and tests |
 | `bun run build` | Production build of the web app |
 
 ## Creating a project
 
-Link the CLI once, from this repo:
+From any directory, no install or clone needed:
 
 ```bash
-cd cli
-bun link
+bunx github:christianstamati/cstack my-app
 ```
 
-Then, from any directory:
+`bunx` downloads this repo from GitHub and runs `cli/src/index.ts`, so a new
+project always starts from what's on `main`. To pin a version, add a tag or
+commit: `github:christianstamati/cstack#v1.0.0`. For a shorter command, add an
+alias to `~/.zshrc`:
 
 ```bash
-cstack new my-app
+alias create-cstack-app="bunx github:christianstamati/cstack"
 ```
 
-It copies this repo's working tree into `./my-app`, leaving out `cli/` and
-anything gitignored, and renames `cstack` to `my-app`. Then it runs
-`git init` and `bun install`. Next it creates a Convex project with a dev and
-a production deployment, generates the auth signing keys, and sets every
-env var. It commits, creates a private GitHub repo and a Vercel project for
-`apps/web`, and pushes.
+It copies the template into `./my-app`, leaving out `cli/`, and renames
+`cstack` to `my-app`. Then it runs `git init` and `bun install`. Next it
+creates a Convex project with a dev and a production deployment, generates the
+auth signing keys, and sets every env var. It commits, creates a private
+GitHub repo and a Vercel project for `apps/web`, and pushes.
 
 Before setting env vars it asks for a Google OAuth client and a Resend API
 key. Both are optional. It also prints the Google redirect URIs to register.
@@ -121,6 +125,10 @@ Vercel's GitHub integration and the [Renovate app](https://github.com/apps/renov
 need access to each new repo. Granting both "All repositories" once covers
 every project after it.
 
+To try changes to the template before pushing them, run `bun link` in this
+repo once. `create-cstack-app my-app` then copies your working tree, including
+uncommitted files.
+
 ## Deploying
 
 A push to `main` deploys to Vercel. `apps/web/vercel.json` runs
@@ -140,7 +148,7 @@ Google client are set.
 
 | Variable | |
 | --- | --- |
-| `AUTH_PRIVATE_KEY`, `AUTH_JWKS` | Signing keys for Convex Auth. `cstack new` generates them |
+| `AUTH_PRIVATE_KEY`, `AUTH_JWKS` | Signing keys for Convex Auth. The CLI generates them |
 | `AUTH_GOOGLE_CLIENT_ID`, `AUTH_GOOGLE_CLIENT_SECRET` | The Google OAuth client |
 | `SITE_URL` | Where sign-in may send users back to: `http://localhost:3000` in dev, the Vercel URL in production |
 | `RESEND_API_KEY` | Without it, emails go to the Convex logs instead of being sent |
@@ -163,6 +171,25 @@ Google answers a wrong one with `redirect_uri_mismatch`.
 
 While the consent screen is in testing, only accounts listed as test users
 can sign in.
+
+## Design system rules
+
+`.oxlintrc.json` runs the six [@shadcn/lint](https://github.com/shadcn-ui/lint)
+rules as errors and turns every built-in Oxlint rule off, so it never
+overlaps with Biome. The pre-commit hook and CI both run it.
+
+A page styles a component through `variant` and `size`. Its `className` may
+only add layout, like margin, width or position. `Card` and components whose
+names end in `Content`, `Header` or `Footer` also take padding and gap. Colors
+must be theme tokens, sizes must be on the scale, and there are no inline
+styles. The components in `packages/ui/src/components` are exempt from the
+restyle, arbitrary-value and static-class rules, since they define the look.
+
+When a design needs something no variant gives, add the variant or theme token
+in `packages/ui`, or widen a contract in `.oxlintrc.json`. The
+[design system guide](https://github.com/shadcn-ui/lint/blob/main/docs/design-systems.md)
+shows the options. For warnings in the editor, install the
+[Oxc extension](https://marketplace.visualstudio.com/items?itemName=oxc.oxc-vscode).
 
 ## Testing
 

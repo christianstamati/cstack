@@ -3,16 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Scaffold a new project from the cstack template",
-  "bin": {
-    "cstack": "./src/index.ts"
-  },
+  "description": "The create-cstack-app CLI. Its bin and dependency are declared in the root package.json, which is what bunx installs.",
   "scripts": {
     "typecheck": "tsc --noEmit"
-  },
-  "dependencies": {
-    "@clack/prompts": "^1.8.1",
-    "jose": "^6.2.12"
   },
   "devDependencies": {
     "@types/bun": "^1.4.2",

@@ -38,7 +38,7 @@ export function SignInCard() {
   return (
     <Card className="w-full max-w-sm">
       <CardHeader>
-        <CardTitle className="text-lg">Sign in to {site.name}</CardTitle>
+        <CardTitle>Sign in to {site.name}</CardTitle>
         <CardDescription>Continue with your Google account.</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">

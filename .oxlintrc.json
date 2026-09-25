@@ -1,0 +1,43 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": [],
+  "categories": { "correctness": "off" },
+  "jsPlugins": ["@shadcn/lint"],
+  "options": { "reportUnusedDisableDirectives": "error" },
+  "ignorePatterns": ["**/routeTree.gen.ts", "**/convex/_generated/**"],
+  "settings": {
+    "shadcn": {
+      "ui": "@workspace/ui/components"
+    }
+  },
+  "rules": {
+    "shadcn/no-restyle": [
+      "error",
+      {
+        "allow": ["layout"],
+        "contracts": [
+          {
+            "pattern": "^Card$|(Content|Header|Footer)$",
+            "allow": ["layout", "spacing"]
+          }
+        ]
+      }
+    ],
+    "shadcn/no-raw-colors": "error",
+    "shadcn/no-arbitrary-values": "error",
+    "shadcn/no-inline-styles": "error",
+    "shadcn/no-unknown-classes": "error",
+    "shadcn/require-static-classes": "error"
+  },
+  "overrides": [
+    {
+      "files": ["packages/ui/src/components/**"],
+      "rules": {
+        "shadcn/no-restyle": "off",
+        "shadcn/no-arbitrary-values": "off",
+        "shadcn/require-static-classes": "off",
+        "shadcn/no-unknown-classes": ["error", { "allow": ["toaster"] }]
+      }
+    }
+  ]
+}

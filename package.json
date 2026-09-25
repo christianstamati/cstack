@@ -3,6 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "bin": {
+    "create-cstack-app": "cli/src/index.ts"
+  },
   "packageManager": "bun@1.4.2",
   "workspaces": [
     "apps/*",
@@ -16,13 +19,19 @@
     "test": "turbo test",
     "check": "biome check .",
     "check:fix": "biome check --write .",
-    "ci": "biome ci . && turbo typecheck test",
+    "lint": "oxlint",
+    "ci": "biome ci . && oxlint && turbo typecheck test",
     "ui:add": "cd apps/web && bunx shadcn@latest add",
     "prepare": "git rev-parse --git-dir >/dev/null 2>&1 || exit 0; lefthook install"
   },
+  "dependencies": {
+    "@clack/prompts": "^1.8.1"
+  },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",
+    "@shadcn/lint": "^0.2.0",
     "lefthook": "^2.1.14",
+    "oxlint": "^1.85.0",
     "turbo": "^2.11.3",
     "typescript": "^7.0.2"
   },
