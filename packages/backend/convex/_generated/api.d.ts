@@ -9,9 +9,7 @@
  */
 
 import type * as auth from "../auth.js";
-import type * as http from "../http.js";
 import type * as lib_auth from "../lib/auth.js";
-import type * as lib_email from "../lib/email.js";
 import type * as tasks from "../tasks.js";
 import type * as users from "../users.js";
 
@@ -23,9 +21,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
-  http: typeof http;
   "lib/auth": typeof lib_auth;
-  "lib/email": typeof lib_email;
   tasks: typeof tasks;
   users: typeof users;
 }>;
@@ -59,5 +55,4 @@ export declare const internal: FilterApi<
 export declare const components: {
   auth: import("@convex-dev/auth/core/_generated/component.js").ComponentApi<"auth">;
   oauthGoogle: import("@convex-dev/auth/providers/oauth/_generated/component.js").ComponentApi<"oauthGoogle">;
-  resend: import("@convex-dev/resend/_generated/component.js").ComponentApi<"resend">;
 };

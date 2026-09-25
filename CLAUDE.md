@@ -15,7 +15,6 @@ Before finishing a change, run `bun run check:fix`, `bun run lint`, `bun run typ
 - Get the caller with `getAuthUserId(ctx)` from `@convex-dev/auth/core` (returns the `users` id or null), or `requireUserId(ctx)` from `convex/lib/auth.ts`. Check ownership before reading or writing another user's documents.
 - Throw `ConvexError("message")` for errors the user should see; other errors are redacted in production.
 - Queries that the UI subscribes to return an empty value for signed-out callers instead of throwing.
-- Send email with `sendEmail(ctx, ...)` from `convex/lib/email.ts`.
 - Test with convex-test: `setup()` and `signedInAs(t, email)` from `convex/test.setup.ts`. Test files are `*.test.ts` next to the code.
 - Deployment env vars are validated in `convex/convex.config.ts`. Add new required ones there.
 - Auth is Convex Auth v2 (alpha, no written docs yet). The API reference is the examples at https://github.com/get-convex/convex-auth/tree/v2.0.0-alpha.2/examples.

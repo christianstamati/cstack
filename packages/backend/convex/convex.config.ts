@@ -1,6 +1,5 @@
 import auth from "@convex-dev/auth/core/convex.config.js"
 import oauth from "@convex-dev/auth/providers/oauth/convex.config.js"
-import resend from "@convex-dev/resend/convex.config.js"
 import { defineApp } from "convex/server"
 import { v } from "convex/values"
 
@@ -24,8 +23,9 @@ app.use(auth, {
   },
 })
 
-// Google sign-in. Register this redirect URI in the Google Cloud console:
-// https://<deployment>.convex.site/oauth/google/callback
+// Google sign-in. Register `<CONVEX_SITE_URL>/oauth/google/callback` as a
+// redirect URI in the Google Cloud console: http://127.0.0.1:<port>/... for a
+// local deployment, https://<deployment>.convex.site/... for a cloud one.
 app.use(oauth, {
   name: "oauthGoogle",
   httpPrefix: "/oauth/google",
@@ -34,8 +34,5 @@ app.use(oauth, {
     CLIENT_SECRET: app.env.AUTH_GOOGLE_CLIENT_SECRET,
   },
 })
-
-// Queued, retried email delivery through Resend.
-app.use(resend)
 
 export default app
