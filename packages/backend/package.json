@@ -13,7 +13,7 @@
     }
   },
   "scripts": {
-    "dev": "convex dev",
+    "dev": "convex dev < /dev/null",
     "setup": "convex dev --once",
     "deploy": "convex deploy",
     "codegen": "convex codegen",
