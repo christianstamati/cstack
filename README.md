@@ -89,10 +89,12 @@ From any directory, no install or clone needed:
 bunx github:christianstamati/cstack my-app
 ```
 
-`bunx` downloads this repo from GitHub and runs `cli/src/index.ts`, so a new
-project always starts from what's on `main`. To pin a version, add a tag or
-commit: `github:christianstamati/cstack#v1.0.0`. For a shorter command, add an
-alias to `~/.zshrc`:
+`bunx` downloads this repo from GitHub and runs `cli/src/index.ts`. It keeps
+that download and reuses it on later runs, so the CLI checks `main` with
+`git ls-remote` on start and switches to the newest commit when the cached one
+is behind. To pin a version instead, add a tag or commit:
+`github:christianstamati/cstack#v1.0.0`. For a shorter command, add an alias
+to `~/.zshrc`:
 
 ```bash
 alias create-cstack-app="bunx github:christianstamati/cstack"
@@ -125,9 +127,12 @@ Vercel's GitHub integration and the [Renovate app](https://github.com/apps/renov
 need access to each new repo. Granting both "All repositories" once covers
 every project after it.
 
-To try changes to the template before pushing them, run `bun link` in this
-repo once. `create-cstack-app my-app` then copies your working tree, including
-uncommitted files.
+To try changes to the template before pushing them, run the CLI from this
+checkout. It copies your working tree, including uncommitted files:
+
+```bash
+bun ~/dev/cstack/cli/src/index.ts my-app
+```
 
 ## Deploying
 

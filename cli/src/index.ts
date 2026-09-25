@@ -15,12 +15,13 @@ import {
 import { hasCommand, run } from "./exec"
 import { createGithubRepo, isGithubReady, pushMain } from "./github"
 import { copyTemplate } from "./template"
+import { runLatestIfStale } from "./update"
 import { createVercelProject, isVercelReady } from "./vercel"
 
 const HELP = `Usage: create-cstack-app <name> [options]
 
-Run it with \`bunx github:christianstamati/cstack <name>\`, or as
-\`create-cstack-app\` after \`bun link\` in a local checkout.
+Run it with \`bunx github:christianstamati/cstack <name>\`. It always
+uses the latest commit on main unless you pin one with \`#<tag or sha>\`.
 
 Scaffolds a project from the cstack template, provisions its Convex backend,
 and creates a GitHub repo and a Vercel project that deploys on every push.
@@ -46,6 +47,8 @@ const DEV_SITE_URL = "http://localhost:3000"
 type Google = { clientId: string; clientSecret: string }
 
 async function main() {
+  await runLatestIfStale()
+
   const { values, positionals } = parseArgs({
     args: Bun.argv.slice(2),
     allowPositionals: true,
