@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { useConvexAuth } from "convex/react"
 import { useEffect } from "react"
-import { SignInCard } from "@/components/auth/sign-in-card"
+import { SignInCard } from "@/components/auth/SignInCard"
 
 export const Route = createFileRoute("/sign-in")({
   validateSearch: (search): { redirect?: string } => {

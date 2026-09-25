@@ -1,3 +1,4 @@
+import { toast } from "@workspace/ui/components/sonner"
 import { ConvexError } from "convex/values"
 
 /**
@@ -13,4 +14,9 @@ export function errorMessage(
     return error.data
   }
   return fallback
+}
+
+/** Shows a Convex error as a toast. Pass it as a mutation's `onError`. */
+export function toastError(error: unknown) {
+  toast.error(errorMessage(error))
 }

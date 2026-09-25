@@ -17,7 +17,10 @@ import { createGithubRepo, isGithubReady, pushMain } from "./github"
 import { copyTemplate } from "./template"
 import { createVercelProject, isVercelReady } from "./vercel"
 
-const HELP = `Usage: cstack new <name> [options]
+const HELP = `Usage: create-cstack-app <name> [options]
+
+Run it with \`bunx github:christianstamati/cstack <name>\`, or as
+\`create-cstack-app\` after \`bun link\` in a local checkout.
 
 Scaffolds a project from the cstack template, provisions its Convex backend,
 and creates a GitHub repo and a Vercel project that deploys on every push.
@@ -57,7 +60,7 @@ async function main() {
     },
   })
 
-  if (values.help || positionals[0] !== "new") {
+  if (values.help || positionals.length > 1) {
     console.log(HELP)
     process.exit(values.help ? 0 : 1)
   }
@@ -65,7 +68,7 @@ async function main() {
   p.intro("cstack")
 
   const name =
-    positionals[1] ??
+    positionals[0] ??
     (await ask(
       p.text({
         message: "Project name",

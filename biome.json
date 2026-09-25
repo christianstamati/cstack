@@ -54,8 +54,28 @@
       "includes": ["packages/ui/src/components/**"],
       "linter": {
         "rules": {
-          "nursery": { "useSortedClasses": "off" },
-          "a11y": { "noLabelWithoutControl": "off" }
+          "nursery": {
+            "useSortedClasses": "off"
+          },
+          "a11y": {
+            "noLabelWithoutControl": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["apps/web/src/components/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "useFilenamingConvention": {
+              "level": "error",
+              "options": {
+                "filenameCases": ["PascalCase"],
+                "requireAscii": true
+              }
+            }
+          }
         }
       }
     }
