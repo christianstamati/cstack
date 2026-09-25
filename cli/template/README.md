@@ -10,6 +10,8 @@ bun dev
 
 This runs `convex dev` and Vite together through Turborepo. The web app is on http://localhost:3000. The backend is a [local Convex deployment](https://docs.convex.dev/cli/local-deployments): it runs inside `bun dev`, keeps its data in `packages/backend/.convex`, and needs no Convex account.
 
+`bun dev` runs `convex dev` without an interactive terminal, so it never asks to link the local deployment to your Convex account. To move development to a cloud deployment instead, run `bunx convex dev --configure` in `packages/backend`.
+
 | Command | What it does |
 | --- | --- |
 | `bun dev` | Backend and web app in watch mode |
