@@ -3,7 +3,6 @@ import { vGoogleProfile } from "@convex-dev/auth/providers/oauth/google"
 import { v } from "convex/values"
 import { doc } from "convex-helpers/validators"
 import { internalMutation, query } from "./_generated/server"
-import { sendEmail } from "./lib/email"
 import schema from "./schema"
 
 const vGoogleProvider = v.object({
@@ -30,22 +29,11 @@ export const createGoogleUser = internalMutation({
   args: { provider: vGoogleProvider },
   returns: v.id("users"),
   handler: async (ctx, { provider: { profile } }) => {
-    const userId = await ctx.db.insert("users", {
+    return await ctx.db.insert("users", {
       name: profile.name,
       email: profile.email,
       image: profile.picture,
     })
-
-    if (profile.email && profile.emailVerified) {
-      await sendEmail(ctx, {
-        to: profile.email,
-        subject: "Welcome to cstack",
-        text: `Hi ${profile.name ?? "there"},\n\nThanks for signing up for cstack.`,
-        html: `<p>Hi ${escapeHtml(profile.name ?? "there")},</p><p>Thanks for signing up for cstack.</p>`,
-      })
-    }
-
-    return userId
   },
 })
 
@@ -62,11 +50,3 @@ export const syncGoogleProfile = internalMutation({
     return null
   },
 })
-
-function escapeHtml(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-}

@@ -5,10 +5,11 @@
 
 cstack is a template for full-stack TypeScript apps, plus a CLI that turns it
 into a new project. The template is a small working app: Google sign-in, a
-task list that updates live across tabs, email through Resend, tests and CI.
-`bunx github:christianstamati/cstack my-app` copies it, creates the Convex
-project, the GitHub repo and the Vercel project, and pushes. The first
-production deploy starts before the command exits.
+task list that updates live across tabs, tests and CI.
+`bunx github:christianstamati/cstack my-app` copies it, gives it a local Convex
+backend that needs no account, and makes the first commit in a local git repo.
+GitHub, Convex Cloud and Vercel come later, when the project is ready for
+them.
 
 The task list is an example. Delete `convex/tasks.ts`, the `tasks` table,
 `apps/web/src/components/tasks` and the dashboard page when a real project
@@ -17,7 +18,7 @@ starts.
 - `apps/web` the TanStack Start app, deployed to Vercel
 - `packages/backend` Convex schema, functions and their tests
 - `packages/ui` shadcn components on Base UI, shared by the app
-- `cli` the `cstack` command. It never ends up in a generated project
+- `cli` the project generator. It never ends up in a generated project
 
 ## Stack
 
@@ -27,9 +28,8 @@ starts.
 | Language | [TypeScript 7](https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/), the Go port of the compiler |
 | Web app | [TanStack Start](https://tanstack.com/start) with React 19 and Vite 8, built for Vercel by [Nitro](https://nitro.build) |
 | Data fetching | [TanStack Query](https://tanstack.com/query) through the [Convex adapter](https://docs.convex.dev/client/tanstack/tanstack-query). Every query is a live subscription |
-| Backend | [Convex](https://convex.dev) Cloud, one dev deployment per developer and one production deployment |
+| Backend | [Convex](https://convex.dev). New projects develop against a [local deployment](https://docs.convex.dev/cli/local-deployments) and use Convex Cloud for production |
 | Auth | [Convex Auth](https://github.com/get-convex/convex-auth) v2 (alpha) with Google sign-in |
-| Email | [Resend](https://resend.com) through the [Convex component](https://www.convex.dev/components/resend) |
 | UI | [shadcn/ui](https://ui.shadcn.com) on [Base UI](https://base-ui.com) with Tailwind CSS 4 |
 | Tests | [Vitest](https://vitest.dev) and [convex-test](https://docs.convex.dev/testing/convex-test) |
 | Lint and format | [Biome](https://biomejs.dev), run on staged files by [lefthook](https://github.com/evilmartians/lefthook) before each commit |
@@ -47,9 +47,7 @@ under you.
 | --- | --- | --- |
 | [Bun](https://bun.sh) | 1.4 or later | Everything |
 | [Node](https://nodejs.org) | 22 or later | Vite and the Convex CLI run on it |
-| Convex account | | Dev and production deployments. Log in with `bunx convex login` |
-| [GitHub CLI](https://cli.github.com) | logged in | The CLI creates the repo |
-| [Vercel CLI](https://vercel.com/docs/cli) | logged in | The CLI creates the Vercel project |
+| Convex and Vercel accounts | | Only to deploy. New projects run without them |
 
 Turborepo, Biome, Oxlint and lefthook are dev dependencies, so `bun install`
 brings them. It also installs the git hooks.
@@ -101,31 +99,19 @@ alias create-cstack-app="bunx github:christianstamati/cstack"
 ```
 
 It copies the template into `./my-app`, leaving out `cli/`, and renames
-`cstack` to `my-app`. Then it runs `git init` and `bun install`. Next it
-creates a Convex project with a dev and a production deployment, generates the
-auth signing keys, and sets every env var. It commits, creates a private
-GitHub repo and a Vercel project for `apps/web`, and pushes.
+`cstack` to `my-app`. Then it runs `git init` and `bun install`. Next it creates
+a local Convex deployment: the backend runs inside `bun dev`, keeps its data in
+`packages/backend/.convex`, and needs no Convex account. It generates the auth
+signing keys, sets the env vars, pushes the backend and makes the first commit.
+Nothing leaves your machine. Add a GitHub remote when you want one.
 
-Before setting env vars it asks for a Google OAuth client and a Resend API
-key. Both are optional. It also prints the Google redirect URIs to register.
-Without a Google client, sign-in fails at Google until you set one.
-
-| Option | |
-| --- | --- |
-| `--team <slug>` | Convex team. Asked for when you're in more than one |
-| `--local` | A local Convex backend with no account, and no GitHub or Vercel |
-| `--no-github`, `--no-vercel` | Skip those steps. No GitHub means no Vercel |
-| `--public` | Public GitHub repo |
-| `-y`, `--yes` | Don't prompt for credentials or confirmation |
-
-Exporting `CSTACK_GOOGLE_CLIENT_ID`, `CSTACK_GOOGLE_CLIENT_SECRET`,
-`CSTACK_RESEND_API_KEY`, `CSTACK_EMAIL_FROM` or `CSTACK_CONVEX_TEAM` skips the
-matching prompt. One Google client can serve every project once each
-project's redirect URIs are on it.
-
-Vercel's GitHub integration and the [Renovate app](https://github.com/apps/renovate)
-need access to each new repo. Granting both "All repositories" once covers
-every project after it.
+Before setting env vars it asks for a Google OAuth client and prints the
+redirect URI to register, such as
+`http://127.0.0.1:3211/oauth/google/callback`. The client is optional; without
+one, sign-in fails at Google until you set it. `-y` skips the prompts, and
+exporting `CSTACK_GOOGLE_CLIENT_ID` and `CSTACK_GOOGLE_CLIENT_SECRET` answers
+them. One Google client can serve every project once each project's redirect
+URIs are on it.
 
 To try changes to the template before pushing them, run the CLI from this
 checkout. It copies your working tree, including uncommitted files:
@@ -136,13 +122,13 @@ bun ~/dev/cstack/cli/src/index.ts my-app
 
 ## Deploying
 
-A push to `main` deploys to Vercel. `apps/web/vercel.json` runs
-`convex deploy`, which pushes the backend to the production deployment with
-`CONVEX_DEPLOY_KEY` and then builds the web app against it.
-
-Preview deployments are off, because only production has a deploy key.
-GitHub Actions checks pull requests instead. To turn previews on, add a Convex
-preview deploy key as `CONVEX_DEPLOY_KEY` for Vercel's Preview environment.
+A generated project deploys to Vercel, with its backend on Convex Cloud. Its
+README walks through the one-time setup: a GitHub remote, a Convex project and
+deploy key, and a Vercel project for `apps/web`. The source is
+[`cli/template/README.md`](cli/template/README.md). After that, every push to
+`main` deploys: `apps/web/vercel.json` runs `convex deploy`, which pushes the
+backend to production with `CONVEX_DEPLOY_KEY` and then builds the web app
+against it.
 
 ### Environment variables
 
@@ -156,9 +142,6 @@ Google client are set.
 | `AUTH_PRIVATE_KEY`, `AUTH_JWKS` | Signing keys for Convex Auth. The CLI generates them |
 | `AUTH_GOOGLE_CLIENT_ID`, `AUTH_GOOGLE_CLIENT_SECRET` | The Google OAuth client |
 | `SITE_URL` | Where sign-in may send users back to: `http://localhost:3000` in dev, the Vercel URL in production |
-| `RESEND_API_KEY` | Without it, emails go to the Convex logs instead of being sent |
-| `EMAIL_FROM` | Sender, like `My App <hello@example.com>` |
-| `RESEND_WEBHOOK_SECRET` | Optional. Delivery status from Resend, posted to `/resend-webhook` |
 
 ### Google sign-in
 
@@ -169,9 +152,9 @@ needs one authorized redirect URI per Convex deployment:
 <CONVEX_SITE_URL>/oauth/google/callback
 ```
 
-`CONVEX_SITE_URL` is the deployment's `.convex.site` address. For the dev
-deployment it's `VITE_CONVEX_SITE_URL` in `packages/backend/.env.local`. The
-path is `/oauth/google/callback`, not v1's `/api/auth/callback/google`.
+`CONVEX_SITE_URL` is `VITE_CONVEX_SITE_URL` in `packages/backend/.env.local`:
+`http://127.0.0.1:<port>` for a local deployment, and the `.convex.site` address
+for a cloud one. The path is `/oauth/google/callback`, not v1's `/api/auth/callback/google`.
 Google answers a wrong one with `redirect_uri_mismatch`.
 
 While the consent screen is in testing, only accounts listed as test users
