@@ -24,14 +24,14 @@
   "dependencies": {
     "@convex-dev/auth": "2.0.0-alpha.2",
     "convex": "^1.46.0",
-    "convex-helpers": "^0.1.124"
+    "convex-helpers": "^0.1.128"
   },
   "devDependencies": {
     "@edge-runtime/vm": "^5.0.0",
-    "@types/node": "^24",
+    "@types/node": "^24.19.1",
     "convex-test": "^0.0.60",
     "typescript": "^7.0.2",
-    "vite": "^8.3.1",
-    "vitest": "^5.0.1"
+    "vite": "^8.3.4",
+    "vitest": "^5.0.3"
   }
 }
