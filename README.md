@@ -24,15 +24,15 @@ starts.
 
 | Concern | Tool |
 | --- | --- |
-| Monorepo | [Turborepo](https://turborepo.com) and [Bun](https://bun.sh) workspaces |
+| Monorepo | [Bun](https://bun.sh) workspaces, with tasks run and cached by [Vite+](https://viteplus.dev) (`vp run`) |
 | Language | [TypeScript 7](https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/), the Go port of the compiler |
-| Web app | [TanStack Start](https://tanstack.com/start) with React 19 and Vite 8, built for Vercel by [Nitro](https://nitro.build) |
+| Web app | [TanStack Start](https://tanstack.com/start) with React 19 and Vite 8 (through Vite+), built for Vercel by [Nitro](https://nitro.build) |
 | Data fetching | [TanStack Query](https://tanstack.com/query) through the [Convex adapter](https://docs.convex.dev/client/tanstack/tanstack-query). Every query is a live subscription |
 | Backend | [Convex](https://convex.dev). New projects develop against a [local deployment](https://docs.convex.dev/cli/local-deployments) and use Convex Cloud for production |
 | Auth | [Convex Auth](https://github.com/get-convex/convex-auth) v2 (alpha) with Google sign-in |
 | UI | [shadcn/ui](https://ui.shadcn.com) on [Base UI](https://base-ui.com) with Tailwind CSS 4 |
-| Tests | [Vitest](https://vitest.dev) and [convex-test](https://docs.convex.dev/testing/convex-test) |
-| Lint and format | [Biome](https://biomejs.dev), run on staged files by [lefthook](https://github.com/evilmartians/lefthook) before each commit |
+| Tests | [Vitest](https://vitest.dev), bundled with Vite+, and [convex-test](https://docs.convex.dev/testing/convex-test) |
+| Lint and format | `vp check`: [Oxfmt](https://oxc.rs/docs/guide/usage/formatter.html), [Oxlint](https://oxc.rs) and TypeScript type checks in one pass. A pre-commit hook runs it on staged files |
 | Design system | [@shadcn/lint](https://github.com/shadcn-ui/lint) through [Oxlint](https://oxc.rs). Components are styled through their variants, colors come from theme tokens, sizes from the scale |
 | Dependencies | [Renovate](https://docs.renovatebot.com), grouped weekly PRs. Stable minor and patch updates merge once CI passes |
 
@@ -46,11 +46,13 @@ under you.
 | Tool | Version | Needed for |
 | --- | --- | --- |
 | [Bun](https://bun.sh) | 1.4 or later | Everything |
-| [Node](https://nodejs.org) | 22 or later | Vite and the Convex CLI run on it |
+| [Node](https://nodejs.org) | 22.18, 24.11 or later | Vite+ and the Convex CLI run on it |
 | Convex and Vercel accounts | | Only to deploy. New projects run without them |
 
-Turborepo, Biome, Oxlint and lefthook are dev dependencies, so `bun install`
-brings them. It also installs the git hooks.
+Vite+ is a dev dependency, so `bun install` brings it. It also installs the git
+hooks. For `vp` on your PATH, install the
+[global CLI](https://viteplus.dev/guide/global-cli); otherwise run it as
+`bunx vp`.
 
 ## Quick start
 
@@ -74,9 +76,8 @@ bunx convex dev --once --configure existing --project cstack
 | `bun dev` | Backend and web app in watch mode |
 | `bun run test` | Backend tests |
 | `bun run typecheck` | `tsc` in every package |
-| `bun run check` | Biome lint and format check. `check:fix` applies the fixes |
-| `bun run lint` | Design-system rules (@shadcn/lint) |
-| `bun run ci` | What CI runs: Biome, design-system rules, typecheck and tests |
+| `bun run check` | Format, lint (including the design-system rules) and type checks. `check:fix` applies the fixes |
+| `bun run ci` | What CI runs: `check`, `typecheck` and `test` |
 | `bun run build` | Production build of the web app |
 
 ## Creating a project
@@ -162,9 +163,9 @@ can sign in.
 
 ## Design system rules
 
-`.oxlintrc.json` runs the six [@shadcn/lint](https://github.com/shadcn-ui/lint)
-rules as errors and turns every built-in Oxlint rule off, so it never
-overlaps with Biome. The pre-commit hook and CI both run it.
+The `lint` block in the root `vite.config.ts` runs the six
+[@shadcn/lint](https://github.com/shadcn-ui/lint) rules as errors, next to
+Oxlint's correctness rules. `vp check`, the pre-commit hook and CI all run it.
 
 A page styles a component through `variant` and `size`. Its `className` may
 only add layout, like margin, width or position. `Card` and components whose
@@ -174,10 +175,10 @@ styles. The components in `packages/ui/src/components` are exempt from the
 restyle, arbitrary-value and static-class rules, since they define the look.
 
 When a design needs something no variant gives, add the variant or theme token
-in `packages/ui`, or widen a contract in `.oxlintrc.json`. The
+in `packages/ui`, or widen a contract in `vite.config.ts`. The
 [design system guide](https://github.com/shadcn-ui/lint/blob/main/docs/design-systems.md)
-shows the options. For warnings in the editor, install the
-[Oxc extension](https://marketplace.visualstudio.com/items?itemName=oxc.oxc-vscode).
+shows the options. For warnings and formatting in the editor, install the
+[Vite Plus Extension Pack](https://marketplace.visualstudio.com/items?itemName=VoidZero.vite-plus-extension-pack).
 
 ## Testing
 

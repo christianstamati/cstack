@@ -6,6 +6,7 @@ import type { Doc } from "@workspace/backend/dataModel"
 import { Button } from "@workspace/ui/components/button"
 import { Checkbox } from "@workspace/ui/components/checkbox"
 import { toast } from "@workspace/ui/components/sonner"
+
 import { toastError } from "@/lib/errors"
 
 /** One task: a checkbox to complete it and a button to delete it. */

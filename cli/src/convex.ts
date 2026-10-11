@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises"
 import { join } from "node:path"
+
 import { generateAuthKeys } from "./auth-keys"
 import { CommandError, run } from "./exec"
 

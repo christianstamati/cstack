@@ -1,4 +1,5 @@
 import type { ReactNode } from "react"
+
 import { AppHeader } from "@/components/layout/AppHeader"
 
 /** The layout of signed-in pages: the header and a centered content column. */

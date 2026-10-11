@@ -1,6 +1,7 @@
 import { useNavigate } from "@tanstack/react-router"
 import { useConvexAuth } from "convex/react"
 import { type ReactNode, useEffect } from "react"
+
 import { LoadingScreen } from "@/components/layout/LoadingScreen"
 
 /**

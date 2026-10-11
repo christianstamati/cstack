@@ -1,5 +1,6 @@
 import { getAuthUserId } from "@convex-dev/auth/core"
 import { ConvexError } from "convex/values"
+
 import type { QueryCtx } from "../_generated/server"
 
 /** Returns the signed-in user's id, or throws if nobody is signed in. */

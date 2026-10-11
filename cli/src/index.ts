@@ -2,7 +2,9 @@
 import { existsSync, readdirSync } from "node:fs"
 import { join, relative, resolve } from "node:path"
 import { parseArgs } from "node:util"
+
 import * as p from "@clack/prompts"
+
 import {
   createLocalDeployment,
   deploymentEnv,

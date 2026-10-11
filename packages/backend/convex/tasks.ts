@@ -2,8 +2,9 @@
 // per-user query that the web app subscribes to live, and mutations that
 // check ownership. Delete it (and the `tasks` table) once you have your own.
 import { getAuthUserId } from "@convex-dev/auth/core"
-import { ConvexError, v } from "convex/values"
 import { doc } from "convex-helpers/validators"
+import { ConvexError, v } from "convex/values"
+
 import type { Id } from "./_generated/dataModel"
 import { type MutationCtx, mutation, query } from "./_generated/server"
 import { requireUserId } from "./lib/auth"
