@@ -75,9 +75,8 @@ bunx convex dev --once --configure existing --project cstack
 | --- | --- |
 | `bun dev` | Backend and web app in watch mode |
 | `bun run test` | Backend tests |
-| `bun run typecheck` | `tsc` in every package |
-| `bun run check` | Format, lint (including the design-system rules) and type checks. `check:fix` applies the fixes |
-| `bun run ci` | What CI runs: `check`, `typecheck` and `test` |
+| `bun run check` | Format, lint (including the design-system rules) and type checks in every package. `check:fix` applies the fixes |
+| `bun run ci` | What CI runs: `check` and `test` |
 | `bun run build` | Production build of the web app |
 
 ## Creating a project
