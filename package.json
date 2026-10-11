@@ -22,11 +22,10 @@
   "scripts": {
     "dev": "vp run -r --parallel dev",
     "build": "vp run -r build",
-    "typecheck": "vp run -r --cache typecheck",
     "test": "vp run -r --cache test",
     "check": "vp check",
     "check:fix": "vp check --fix",
-    "ci": "vp check && vp run typecheck && vp run test",
+    "ci": "vp check && vp run test",
     "ui:add": "cd apps/web && bunx shadcn@latest add",
     "prepare": "git rev-parse --git-dir >/dev/null 2>&1 || exit 0; vp config --no-agent"
   },

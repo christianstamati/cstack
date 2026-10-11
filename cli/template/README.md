@@ -16,8 +16,7 @@ This runs `convex dev` and Vite together through Vite+ (`vp run`). The web app i
 | --- | --- |
 | `bun dev` | Backend and web app in watch mode |
 | `bun run test` | Backend tests (Vitest + convex-test) |
-| `bun run typecheck` | `tsc` (TypeScript 7) in every package |
-| `bun run check` / `check:fix` | `vp check`: Oxfmt, Oxlint with the design-system rules ([@shadcn/lint](https://github.com/shadcn-ui/lint)) and type checks |
+| `bun run check` / `check:fix` | `vp check`: Oxfmt, Oxlint with the design-system rules ([@shadcn/lint](https://github.com/shadcn-ui/lint)) and type checks (TypeScript 7) in every package |
 | `bun run build` | Production build of the web app |
 | `bun run ui:add <component>` | Add a shadcn/ui component to `packages/ui` |
 

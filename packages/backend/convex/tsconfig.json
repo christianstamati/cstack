@@ -1,6 +1,6 @@
 {
   /* Describes the environment Convex functions run in. Used by `convex dev`,
-   * `convex deploy` and `bun run typecheck` to typecheck functions. */
+   * `convex deploy` and `bun run check` to typecheck functions. */
   "extends": "../../../tsconfig.base.json",
   "compilerOptions": {
     /* Required by Convex */

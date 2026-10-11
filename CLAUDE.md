@@ -6,7 +6,7 @@ Bun workspaces monorepo on [Vite+](https://viteplus.dev) (`vp`). See README.md f
 - `packages/backend`: Convex functions in `convex/`, imported by the web app as `@workspace/backend/api`
 - `packages/ui`: shadcn/ui components (Base UI primitives, Tailwind CSS 4), imported as `@workspace/ui/components/<name>`
 
-Before finishing a change, run `bun run check:fix`, `bun run typecheck` and `bun run test`, and fix every error.
+Before finishing a change, run `bun run check:fix` and `bun run test`, and fix every error.
 
 ## Backend (Convex)
 
@@ -50,6 +50,6 @@ Before finishing a change, run `bun run check:fix`, `bun run typecheck` and `bun
 ## Tooling
 
 - TypeScript 7: `tsc` is the Go-based compiler. There is no TypeScript JS API, so avoid tools that need one.
-- Vite+ replaces Turborepo, Biome and lefthook. `vp check` formats with Oxfmt, lints with Oxlint and type-checks with tsgolint; its config is the `fmt` and `lint` blocks of the root `vite.config.ts`. `vp run -r` runs package scripts in dependency order. A pre-commit hook in `.vite-hooks/` runs `vp staged`.
+- Vite+ replaces Turborepo, Biome and lefthook. `vp check` formats with Oxfmt, lints with Oxlint and type-checks every package with tsgolint (TypeScript 7, each package's own tsconfig); its config is the `fmt` and `lint` blocks of the root `vite.config.ts`. `vp run -r` runs package scripts in dependency order. A pre-commit hook in `.vite-hooks/` runs `vp staged`.
 - Import Vite and Vitest APIs from `vite-plus` and `vite-plus/test`, not `vite` or `vitest`. `vite` and `vite-plus` versions come from the `catalog` in the root `package.json`; keep them in step.
 - Generated files, don't edit: `apps/web/src/routeTree.gen.ts`, `packages/backend/convex/_generated/`.

@@ -17,7 +17,6 @@
     "setup": "convex dev --once",
     "deploy": "convex deploy",
     "codegen": "convex codegen",
-    "typecheck": "tsc --noEmit -p convex",
     "test": "vp test run",
     "test:watch": "vp test"
   },
