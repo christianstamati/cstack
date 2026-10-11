@@ -27,6 +27,11 @@
       ]
     },
     {
+      "description": "vite is an alias of vite-plus-core; update both together",
+      "groupName": "Vite+",
+      "matchPackageNames": ["vite-plus", "@voidzero-dev/vite-plus-core"]
+    },
+    {
       "groupName": "Tailwind CSS",
       "matchPackageNames": ["tailwindcss", "@tailwindcss/**"]
     },

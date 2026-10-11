@@ -14,6 +14,7 @@ import {
   CardTitle,
 } from "@workspace/ui/components/card"
 import { useState } from "react"
+
 import { site } from "@/lib/site"
 
 const FLOW_ERRORS: Record<OauthFlowErrorCode, string> = {
@@ -54,7 +55,7 @@ export function SignInCard() {
           Continue with Google
         </Button>
         {flowError !== null && (
-          <p role="alert" className="text-destructive text-sm">
+          <p role="alert" className="text-sm text-destructive">
             {flowError.message ?? FLOW_ERRORS[flowError.code]}
           </p>
         )}

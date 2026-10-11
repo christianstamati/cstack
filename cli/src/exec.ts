@@ -43,6 +43,6 @@ async function exec(cmd: string[], options: RunOptions) {
 }
 
 export function stripAnsi(text: string) {
-  // biome-ignore lint/suspicious/noControlCharactersInRegex: matching ANSI escapes
+  // oxlint-disable-next-line no-control-regex -- matching ANSI escapes
   return text.replace(/\u001b\[[0-9;]*[A-Za-z]/g, "")
 }

@@ -10,7 +10,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      # Vite+ runs on Node (^22.18, ^24.11 or >=26); Bun installs packages.
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
-      - name: Lint, typecheck and test
+      - name: Format, lint, typecheck and test
         run: bun run ci

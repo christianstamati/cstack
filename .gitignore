@@ -18,7 +18,7 @@ coverage
 .convex
 
 # tooling
-.turbo
+.vite-hooks/_
 *.tsbuildinfo
 .DS_Store
 *.local

@@ -1,10 +1,11 @@
 import { fileURLToPath } from "node:url"
+
 import tailwindcss from "@tailwindcss/vite"
 import { devtools } from "@tanstack/devtools-vite"
 import { tanstackStart } from "@tanstack/react-start/plugin/vite"
 import viteReact from "@vitejs/plugin-react"
 import { nitro } from "nitro/vite"
-import { defineConfig, loadEnv } from "vite"
+import { defineConfig, loadEnv, lazyPlugins } from "vite-plus"
 
 const backendDir = fileURLToPath(
   new URL("../../packages/backend", import.meta.url)
@@ -24,7 +25,7 @@ export default defineConfig(({ mode }) => {
     // instead of silently moving to another port.
     server: { port: 3000, strictPort: true },
     resolve: { tsconfigPaths: true },
-    plugins: [
+    plugins: lazyPlugins(() => [
       devtools(),
       tailwindcss(),
       tanstackStart(),
@@ -38,6 +39,6 @@ export default defineConfig(({ mode }) => {
         },
       }),
       viteReact(),
-    ],
+    ]),
   }
 })

@@ -1,4 +1,5 @@
-import { describe, expect, test } from "vitest"
+import { describe, expect, test } from "vite-plus/test"
+
 import { api } from "./_generated/api"
 import { setup, signedInAs } from "./test.setup"
 

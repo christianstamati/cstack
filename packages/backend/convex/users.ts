@@ -1,7 +1,8 @@
 import { getAuthUserId } from "@convex-dev/auth/core"
 import { vGoogleProfile } from "@convex-dev/auth/providers/oauth/google"
-import { v } from "convex/values"
 import { doc } from "convex-helpers/validators"
+import { v } from "convex/values"
+
 import { internalMutation, query } from "./_generated/server"
 import schema from "./schema"
 

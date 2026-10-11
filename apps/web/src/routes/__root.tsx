@@ -8,10 +8,12 @@ import {
 } from "@tanstack/react-router"
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools"
 import { Toaster } from "@workspace/ui/components/sonner"
-import appCss from "@workspace/ui/globals.css?url"
 import type { ReactNode } from "react"
+
 import { NotFound } from "@/components/layout/NotFound"
 import { site } from "@/lib/site"
+
+import appCss from "@workspace/ui/globals.css?url"
 
 // Follow the OS color scheme. Runs before paint to avoid a flash.
 const themeScript = `(() => {
