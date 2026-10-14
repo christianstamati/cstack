@@ -26,7 +26,7 @@ starts.
 | --- | --- |
 | Monorepo | [Bun](https://bun.sh) workspaces, with tasks run and cached by [Vite+](https://viteplus.dev) (`vp run`) |
 | Language | [TypeScript 7](https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/), the Go port of the compiler |
-| Web app | [TanStack Start](https://tanstack.com/start) with React 19 and Vite 8 (through Vite+), built for Vercel by [Nitro](https://nitro.build) |
+| Web app | [TanStack Start](https://tanstack.com/start) with React 19 and Vite 8 (through Vite+), built for Vercel by [Nitro](https://nitro.build). Generated projects can use [Next.js](https://nextjs.org) instead |
 | Data fetching | [TanStack Query](https://tanstack.com/query) through the [Convex adapter](https://docs.convex.dev/client/tanstack/tanstack-query). Every query is a live subscription |
 | Backend | [Convex](https://convex.dev). New projects develop against a [local deployment](https://docs.convex.dev/cli/local-deployments) and use Convex Cloud for production |
 | Auth | [Convex Auth](https://github.com/get-convex/convex-auth) v2 (alpha) with Google sign-in |
@@ -74,7 +74,7 @@ bunx convex dev --once --configure existing --project cstack
 | Command | What it does |
 | --- | --- |
 | `bun dev` | Backend and web app in watch mode |
-| `bun run test` | Backend tests |
+| `bun run test` | Backend and CLI tests |
 | `bun run check` | Format, lint (including the design-system rules) and type checks in every package. `check:fix` applies the fixes |
 | `bun run ci` | What CI runs: `check` and `test` |
 | `bun run build` | Production build of the web app |
@@ -98,15 +98,26 @@ to `~/.zshrc`:
 alias create-cstack-app="bunx github:christianstamati/cstack"
 ```
 
-It copies the template into `./my-app`, leaving out `cli/`, and renames
-`cstack` to `my-app`. Then it runs `git init` and `bun install`. Next it creates
-a local Convex deployment: the backend runs inside `bun dev`, keeps its data in
-`packages/backend/.convex`, and needs no Convex account. It generates the auth
-signing keys, sets the env vars, pushes the backend and makes the first commit.
-Nothing leaves your machine. Add a GitHub remote when you want one.
+It asks for a frontend and a backend, or takes them as flags:
 
-Before setting env vars it asks for a Google OAuth client and prints the
-redirect URI to register, such as
+| Option | Choices |
+| --- | --- |
+| `--frontend` | `tanstack-start` (default) or `nextjs` |
+| `--backend` | `none` (default) or `convex` |
+
+Without a backend you get the web app and `packages/ui`: a landing page, no
+sign-in and no data. With Convex you also get `packages/backend`, Google sign-in
+and the task list. `-y` takes the defaults for anything not passed as a flag.
+
+It copies the template into `./my-app`, leaving out `cli/`, and renames
+`cstack` to `my-app`. Then it runs `git init` and `bun install`. With Convex it
+creates a local deployment: the backend runs inside `bun dev`, keeps its data in
+`packages/backend/.convex`, and needs no Convex account. It generates the auth
+signing keys, sets the env vars and pushes the backend. Last, it makes the first
+commit. Nothing leaves your machine. Add a GitHub remote when you want one.
+
+With Convex, before setting env vars it asks for a Google OAuth client and
+prints the redirect URI to register, such as
 `http://127.0.0.1:3211/oauth/google/callback`. The client is optional; without
 one, sign-in fails at Google until you set it. `-y` skips the prompts, and
 exporting `CSTACK_GOOGLE_CLIENT_ID` and `CSTACK_GOOGLE_CLIENT_SECRET` answers
@@ -119,6 +130,29 @@ checkout. It copies your working tree, including uncommitted files:
 ```bash
 bun ~/dev/cstack/cli/src/index.ts my-app
 ```
+
+### How the stacks are made
+
+This repo is the TanStack Start + Convex project. The CLI derives the other
+stacks from it: `cli/src/stack.ts` lists what each one leaves out, and the
+folders in `cli/template/variants/` are copied over the result:
+
+| Folder | Used for |
+| --- | --- |
+| `tanstack-start/none` | TanStack Start without a backend: router, home page and Vite config without Convex |
+| `nextjs/base` | The Next.js app, replacing `apps/web` |
+| `nextjs/convex` | Convex for the Next.js app: providers, sign-in, the signed-in pages and the Vercel build. The task list and other Convex components come from `apps/web` |
+
+A dependency version of `"repo"` in a variant's `package.json` takes the
+version `apps/web/package.json` uses. In Markdown files, text between
+`<!-- cstack:if backend=convex -->` and `<!-- cstack:end -->` only goes into
+projects of that stack, which is how `CLAUDE.md` and
+[`cli/template/README.md`](cli/template/README.md) describe each one.
+
+Variant files only type-check inside a generated project, so
+`bun run --cwd cli verify` generates every stack (or one, with `--frontend`
+and `--backend`) and runs install, `check`, tests and the build in each. The
+Templates workflow runs it on every push and pull request.
 
 ## Deploying
 

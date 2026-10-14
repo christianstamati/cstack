@@ -1,0 +1,28 @@
+# Generates a project for every stack the CLI offers and checks it: install,
+# `vp check`, tests and a production build. Only this template repo runs it;
+# the CLI leaves this file out of generated projects.
+name: Templates
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    name: ${{ matrix.frontend }} + ${{ matrix.backend }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        frontend: [tanstack-start, nextjs]
+        backend: [none, convex]
+    steps:
+      - uses: actions/checkout@v5
+      # Vite+ runs on Node (^22.18, ^24.11 or >=26); Bun installs packages.
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run --cwd cli verify --frontend ${{ matrix.frontend }} --backend ${{ matrix.backend }}

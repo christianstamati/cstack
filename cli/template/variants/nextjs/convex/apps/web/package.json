@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "@convex-dev/auth": "repo",
+    "@convex-dev/react-query": "repo",
+    "@tanstack/react-query": "repo",
+    "@workspace/backend": "workspace:*",
+    "convex": "repo"
+  }
+}
