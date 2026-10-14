@@ -13,7 +13,7 @@
     }
   },
   "scripts": {
-    "dev": "convex dev < /dev/null",
+    "dev": "bun scripts/dev.ts",
     "setup": "convex dev --once",
     "deploy": "convex deploy",
     "codegen": "convex codegen",
