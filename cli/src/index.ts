@@ -13,6 +13,16 @@ import {
   setEnv,
 } from "./convex"
 import { run } from "./exec"
+import {
+  BACKENDS,
+  type Backend,
+  DEFAULT_STACK,
+  FRONTENDS,
+  type Frontend,
+  isBackend,
+  isFrontend,
+  type Stack,
+} from "./stack"
 import { copyTemplate } from "./template"
 import { runLatestIfStale } from "./update"
 
@@ -21,12 +31,16 @@ const HELP = `Usage: create-cstack-app <name> [options]
 Run it with \`bunx github:christianstamati/cstack <name>\`. It always
 uses the latest commit on main unless you pin one with \`#<tag or sha>\`.
 
-Scaffolds a project from the cstack template with a local Convex backend (no
-Convex account needed) and a local git repo with the first commit.
+Scaffolds a project from the cstack template and makes the first commit in a
+local git repo. With the Convex backend it also creates a local deployment
+(no Convex account needed).
 
 Options:
-  -y, --yes       Don't ask for Google credentials or confirmation
-  -h, --help      Show this help
+  --frontend <name>  tanstack-start (default) or nextjs
+  --backend <name>   none (default) or convex
+  -y, --yes          Use the defaults for anything not passed, and don't ask
+                     for Google credentials or confirmation
+  -h, --help         Show this help
 
 Environment variables (both skip the Google prompt):
   CSTACK_GOOGLE_CLIENT_ID, CSTACK_GOOGLE_CLIENT_SECRET`
@@ -43,6 +57,8 @@ async function main() {
     args: Bun.argv.slice(2),
     allowPositionals: true,
     options: {
+      frontend: { type: "string" },
+      backend: { type: "string" },
       yes: { type: "boolean", short: "y", default: false },
       help: { type: "boolean", short: "h", default: false },
     },
@@ -73,10 +89,17 @@ async function main() {
   }
   const backendDir = join(root, "packages/backend")
 
+  const stack: Stack = {
+    frontend: await chooseFrontend(values.frontend, values.yes),
+    backend: await chooseBackend(values.backend, values.yes),
+  }
+  const convex = stack.backend === "convex"
+
   p.note(
     [
       `Directory   ${root}`,
-      "Convex      local deployment, no account needed",
+      `Frontend    ${FRONTENDS[stack.frontend].label}`,
+      `Backend     ${convex ? "Convex, local deployment, no account needed" : "None"}`,
       "Git         local repo with the first commit, no remote",
     ].join("\n"),
     "Plan"
@@ -89,29 +112,13 @@ async function main() {
   const spinner = p.spinner()
 
   spinner.start("Copying the template")
-  await copyTemplate(root, name)
+  await copyTemplate(root, name, stack)
   await run(["git", "init", "--quiet", "--initial-branch=main"], { cwd: root })
   spinner.message("Installing dependencies")
   await run(["bun", "install"], { cwd: root })
   spinner.stop("Project files ready")
 
-  // Create the deployment first, so its URL is known when asking for Google
-  // credentials: Google needs the redirect URI.
-  spinner.start("Creating a local Convex deployment")
-  await createLocalDeployment(backendDir)
-  spinner.stop("Local Convex deployment created")
-  const redirectUri = `${siteUrlFrom(await readLocalEnv(backendDir))}/oauth/google/callback`
-
-  const google = await askGoogle(redirectUri, values.yes)
-
-  spinner.start("Configuring the deployment")
-  await setEnv(
-    backendDir,
-    await deploymentEnv({ siteUrl: DEV_SITE_URL, google })
-  )
-  spinner.message("Pushing the backend")
-  await push(backendDir)
-  spinner.stop("Deployment configured")
+  const auth = convex ? await setUpConvex(backendDir, values.yes) : undefined
 
   spinner.start("Creating the first commit")
   await run(["git", "add", "-A"], { cwd: root })
@@ -126,7 +133,11 @@ async function main() {
       "bun dev",
       "",
       `App        ${DEV_SITE_URL}`,
-      "Backend    runs locally inside `bun dev`, data in packages/backend/.convex",
+      ...(convex
+        ? [
+            "Backend    runs locally inside `bun dev`, data in packages/backend/.convex",
+          ]
+        : []),
       "",
       "To push to GitHub, add a remote:",
       "git remote add origin git@github.com:<you>/<repo>.git",
@@ -134,16 +145,16 @@ async function main() {
     ].join("\n"),
     "Next steps"
   )
-  if (google) {
+  if (auth?.google) {
     p.log.info(
-      `Make sure your Google OAuth client lists this redirect URI:\n${redirectUri}`
+      `Make sure your Google OAuth client lists this redirect URI:\n${auth.redirectUri}`
     )
-  } else {
+  } else if (auth) {
     p.log.warn(
       [
         "Set up Google sign-in: create an OAuth client (Web application) at",
         "https://console.cloud.google.com/apis/credentials with this redirect URI:",
-        `  ${redirectUri}`,
+        `  ${auth.redirectUri}`,
         "then run these in packages/backend (each one asks for the value):",
         "  bunx convex env set AUTH_GOOGLE_CLIENT_ID",
         "  bunx convex env set AUTH_GOOGLE_CLIENT_SECRET",
@@ -151,6 +162,71 @@ async function main() {
     )
   }
   p.outro(`${name} is ready.`)
+}
+
+async function chooseFrontend(flag: string | undefined, yes: boolean) {
+  if (flag !== undefined) {
+    if (!isFrontend(flag)) fail(`Unknown frontend: ${flag}`)
+    return flag
+  }
+  if (yes) return DEFAULT_STACK.frontend
+  return ask(
+    p.select<Frontend>({
+      message: "Frontend",
+      initialValue: DEFAULT_STACK.frontend,
+      options: Object.entries(FRONTENDS).map(([value, { label }]) => ({
+        value: value as Frontend,
+        label,
+      })),
+    })
+  )
+}
+
+async function chooseBackend(flag: string | undefined, yes: boolean) {
+  if (flag !== undefined) {
+    if (!isBackend(flag)) fail(`Unknown backend: ${flag}`)
+    return flag
+  }
+  if (yes) return DEFAULT_STACK.backend
+  return ask(
+    p.select<Backend>({
+      message: "Backend",
+      initialValue: DEFAULT_STACK.backend,
+      options: Object.entries(BACKENDS).map(([value, backend]) => ({
+        value: value as Backend,
+        label: backend.label,
+        hint: "hint" in backend ? backend.hint : undefined,
+      })),
+    })
+  )
+}
+
+/**
+ * Creates the local deployment, sets its env vars and pushes the backend.
+ * Returns the Google redirect URI and the Google credentials, if any.
+ */
+async function setUpConvex(backendDir: string, yes: boolean) {
+  const spinner = p.spinner()
+
+  // Create the deployment first, so its URL is known when asking for Google
+  // credentials: Google needs the redirect URI.
+  spinner.start("Creating a local Convex deployment")
+  await createLocalDeployment(backendDir)
+  spinner.stop("Local Convex deployment created")
+  const redirectUri = `${siteUrlFrom(await readLocalEnv(backendDir))}/oauth/google/callback`
+
+  const google = await askGoogle(redirectUri, yes)
+
+  spinner.start("Configuring the deployment")
+  await setEnv(
+    backendDir,
+    await deploymentEnv({ siteUrl: DEV_SITE_URL, google })
+  )
+  spinner.message("Pushing the backend")
+  await push(backendDir)
+  spinner.stop("Deployment configured")
+
+  return { redirectUri, google }
 }
 
 function validateName(name: string) {

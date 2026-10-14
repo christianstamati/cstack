@@ -45,7 +45,13 @@ export default defineConfig({
       typeAware: true,
       typeCheck: true,
     },
-    ignorePatterns: ["**/routeTree.gen.ts", "**/convex/_generated/**"],
+    ignorePatterns: [
+      "**/routeTree.gen.ts",
+      "**/convex/_generated/**",
+      // Variant files only type-check inside a generated project, where
+      // `bun run --cwd cli verify` checks them.
+      "cli/template/**",
+    ],
     settings: {
       shadcn: {
         ui: "@workspace/ui/components",

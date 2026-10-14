@@ -1,0 +1,26 @@
+{
+  "name": "web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev --port 3000",
+    "build": "next build",
+    "start": "next start --port 3000"
+  },
+  "dependencies": {
+    "@tabler/icons-react": "repo",
+    "@workspace/ui": "workspace:*",
+    "next": "^16.4.0",
+    "react": "repo",
+    "react-dom": "repo"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "repo",
+    "@types/react": "repo",
+    "@types/react-dom": "repo",
+    "tailwindcss": "repo",
+    "typescript": "repo"
+  }
+}
