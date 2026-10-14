@@ -5,6 +5,7 @@
 //
 //   bun run --cwd cli verify                              every stack
 //   bun run --cwd cli verify --frontend nextjs --backend convex
+import { realpathSync } from "node:fs"
 import { rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -53,7 +54,12 @@ for (const frontend of frontends) {
 
 async function verify(stack: Stack) {
   const label = `${stack.frontend} + ${stack.backend}`
-  const dir = join(tmpdir(), `cstack-verify-${stack.frontend}-${stack.backend}`)
+  // realpath expands Windows short names (C:\Users\RUNNER~1), which
+  // `bun install` can't link workspace packages under.
+  const dir = join(
+    realpathSync.native(tmpdir()),
+    `cstack-verify-${stack.frontend}-${stack.backend}`
+  )
   console.log(`\n=== ${label} in ${dir}`)
 
   await rm(dir, { recursive: true, force: true })
