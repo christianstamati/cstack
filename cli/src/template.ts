@@ -12,7 +12,7 @@ import { matches, recipe, type Stack } from "./stack"
 export const TEMPLATE_ROOT = resolve(import.meta.dirname, "../..")
 
 /** Files that replace or add to parts of the template for other stacks. */
-const VARIANTS_ROOT = join(TEMPLATE_ROOT, "cli/template/variants")
+const VARIANTS = "cli/template/variants"
 
 /** The name used throughout the template, replaced by the project name. */
 const TEMPLATE_NAME = "cstack"
@@ -34,29 +34,33 @@ const CLI_DEPENDENCIES = ["@clack/prompts"]
  * Copies the template into `dest` as `stack`, with the template name replaced
  * by the project name.
  */
-export async function copyTemplate(dest: string, name: string, stack: Stack) {
+export async function copyTemplate(
+  dest: string,
+  name: string,
+  stack: Stack,
+  root = TEMPLATE_ROOT
+) {
   const { remove, keep, packages, overlays } = recipe(stack)
   const under = (file: string, paths: string[]) =>
     paths.some((path) => file === path || file.startsWith(path))
 
-  const files = (await templateFiles()).filter(
+  const files = (await templateFiles(root)).filter(
     (file) =>
       !EXCLUDED.some((pattern) => pattern.test(file)) &&
       (!under(file, remove) || under(file, keep))
   )
   for (const file of files) {
-    await copyFile(join(TEMPLATE_ROOT, file), join(dest, file), name, stack)
+    await copyFile(join(root, file), join(dest, file), name, stack)
   }
 
   for (const overlay of overlays) {
-    const root = join(VARIANTS_ROOT, overlay)
-    const glob = new Bun.Glob("**/*").scan({ cwd: root, dot: true })
-    for await (const file of glob) {
+    const variant = join(root, VARIANTS, overlay)
+    for (const file of await listFiles(variant)) {
       const target = join(dest, file)
       if (basename(file) === "package.json") {
-        await writePackageJson(target, join(root, file), name)
+        await writePackageJson(target, join(variant, file), name, root)
       } else {
-        await copyFile(join(root, file), target, name, stack)
+        await copyFile(join(variant, file), target, name, stack)
       }
     }
   }
@@ -75,7 +79,7 @@ export async function copyTemplate(dest: string, name: string, stack: Stack) {
   }
 
   await finalizePackageJson(dest)
-  await writeReadme(dest, name, stack)
+  await writeReadme(dest, name, stack, root)
 }
 
 async function copyFile(
@@ -106,10 +110,15 @@ async function copyFile(
  * dependency version of `"repo"` takes the version this repo's web app uses,
  * so both frontends stay on the same releases.
  */
-async function writePackageJson(target: string, source: string, name: string) {
+async function writePackageJson(
+  target: string,
+  source: string,
+  name: string,
+  root: string
+) {
   const extra = JSON.parse(rename(await readFile(source, "utf8"), name))
   const repoWeb = JSON.parse(
-    await readFile(join(TEMPLATE_ROOT, "apps/web/package.json"), "utf8")
+    await readFile(join(root, "apps/web/package.json"), "utf8")
   )
   for (const field of ["dependencies", "devDependencies"]) {
     for (const [dependency, version] of Object.entries(extra[field] ?? {})) {
@@ -179,17 +188,26 @@ export function renderConditionals(text: string, stack: Stack) {
  * like node_modules and .env.local are skipped. A downloaded copy has no git
  * history, but it holds exactly the committed files.
  */
-async function templateFiles() {
-  if (existsSync(join(TEMPLATE_ROOT, ".git"))) {
+export async function templateFiles(root: string) {
+  if (existsSync(join(root, ".git"))) {
     const { stdout } = await run(
       ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
-      { cwd: TEMPLATE_ROOT }
+      { cwd: root }
     )
     return stdout.split("\0").filter(Boolean)
   }
-  return Array.fromAsync(
-    new Bun.Glob("**/*").scan({ cwd: TEMPLATE_ROOT, dot: true })
+  return listFiles(root)
+}
+
+/**
+ * Every file under `root`, as `/`-separated paths like git prints them. On
+ * Windows, Bun.Glob returns `\`-separated ones, which no rule here matches.
+ */
+export async function listFiles(root: string) {
+  const files = await Array.fromAsync(
+    new Bun.Glob("**/*").scan({ cwd: root, dot: true })
   )
+  return files.map((file) => file.replaceAll("\\", "/"))
 }
 
 function isText(bytes: Buffer) {
@@ -214,11 +232,13 @@ async function finalizePackageJson(dest: string) {
   })
 }
 
-async function writeReadme(dest: string, name: string, stack: Stack) {
-  const template = await readFile(
-    join(TEMPLATE_ROOT, "cli/template/README.md"),
-    "utf8"
-  )
+async function writeReadme(
+  dest: string,
+  name: string,
+  stack: Stack,
+  root: string
+) {
+  const template = await readFile(join(root, "cli/template/README.md"), "utf8")
   await writeFile(
     join(dest, "README.md"),
     renderConditionals(template.replaceAll("{{name}}", name), stack)

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { existsSync } from "node:fs"
-import { mkdtemp, readFile, rm } from "node:fs/promises"
+import { cp, mkdir, mkdtemp, readFile, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
@@ -12,7 +12,12 @@ import {
   recipe,
   type Stack,
 } from "./stack"
-import { copyTemplate, renderConditionals, TEMPLATE_ROOT } from "./template"
+import {
+  copyTemplate,
+  renderConditionals,
+  TEMPLATE_ROOT,
+  templateFiles,
+} from "./template"
 
 const STACKS: Stack[] = (Object.keys(FRONTENDS) as Frontend[]).flatMap(
   (frontend) =>
@@ -54,6 +59,47 @@ describe("copyTemplate", () => {
     }
   })
 })
+
+// `bunx github:…` downloads the repo without .git, so the file list comes from
+// a glob instead of git. On Windows that glob returns `\` paths.
+describe("a downloaded template", () => {
+  test("lists the same files as git, with / separators", async () => {
+    const download = await downloadCopy()
+    try {
+      const fromGit = await templateFiles(TEMPLATE_ROOT)
+      const fromDisk = await templateFiles(download)
+      expect(fromDisk.toSorted()).toEqual(fromGit.toSorted())
+    } finally {
+      await rm(download, { recursive: true, force: true })
+    }
+  })
+
+  test("generates the same project as a checkout", async () => {
+    const download = await downloadCopy()
+    const dest = await mkdtemp(join(tmpdir(), "cstack-test-"))
+    try {
+      const stack: Stack = { frontend: "tanstack-start", backend: "none" }
+      await copyTemplate(dest, "my-app", stack, download)
+      expect(existsSync(join(dest, "cli"))).toBe(false)
+      expect(existsSync(join(dest, "packages/backend"))).toBe(false)
+      expect(existsSync(join(dest, "apps/web/src/components/auth"))).toBe(false)
+    } finally {
+      await rm(download, { recursive: true, force: true })
+      await rm(dest, { recursive: true, force: true })
+    }
+  })
+})
+
+/** A copy of the template's files without .git, like bunx downloads. */
+async function downloadCopy() {
+  const download = await mkdtemp(join(tmpdir(), "cstack-download-"))
+  for (const file of await templateFiles(TEMPLATE_ROOT)) {
+    if (!existsSync(join(TEMPLATE_ROOT, file))) continue // deleted locally
+    await mkdir(join(download, file, ".."), { recursive: true })
+    await cp(join(TEMPLATE_ROOT, file), join(download, file))
+  }
+  return download
+}
 
 describe("renderConditionals", () => {
   const stack: Stack = { frontend: "nextjs", backend: "none" }
