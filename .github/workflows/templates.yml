@@ -26,3 +26,20 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - run: bun run --cwd cli verify --frontend ${{ matrix.frontend }} --backend ${{ matrix.backend }}
+
+  # The CLI tests include generating from a copy without .git, which is how
+  # `bunx github:…` runs it. On Windows that path has bitten before.
+  windows:
+    name: Windows (CLI tests, tanstack-start + none)
+    runs-on: windows-latest
+    steps:
+      # Keep LF endings so the generated project passes `vp check`.
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run --cwd cli test
+      - run: bun run --cwd cli verify --frontend tanstack-start --backend none
