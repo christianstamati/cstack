@@ -40,6 +40,8 @@ export class TownStore {
   private readonly queue: QueuedQuestion[] = [];
   private pendingPlan: PendingPlan | null = null;
   private readonly listeners = new Set<(state: TownState) => void>();
+  /** The seq the next newly placed slot gets. */
+  private nextSeq = 0;
 
   constructor(
     projectName: string,
@@ -116,6 +118,7 @@ export class TownStore {
       labels: input.labels,
       auto: true,
       reason: input.reason,
+      seq: this.seqFor(input.slot),
     };
     this.emit();
   }
@@ -199,7 +202,13 @@ export class TownStore {
     if (question.slot) {
       const labels = optionIds.map((id) => question.options.find((o) => o.id === id)!.label);
       if (text) labels.push(text);
-      const placement: Placement = { slot: question.slot, optionIds, labels, auto: false };
+      const placement: Placement = {
+        slot: question.slot,
+        optionIds,
+        labels,
+        auto: false,
+        seq: this.seqFor(question.slot),
+      };
       this.state.placements[question.slot] = placement;
     }
     this.syncPending();
@@ -207,6 +216,11 @@ export class TownStore {
     head.resolve(result);
     this.emit();
     return "ok";
+  }
+
+  /** The slot's seq: kept when it is re-answered, the next one when it is new. */
+  private seqFor(slot: SlotId): number {
+    return this.state.placements[slot]?.seq ?? this.nextSeq++;
   }
 
   agentStopped(): void {

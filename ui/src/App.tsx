@@ -61,7 +61,7 @@ export function App() {
             <Crane state={town.state} />
           </>
         ) : null}
-        <Camera />
+        <Camera state={town.state} />
         <HoverTracker />
       </Canvas>
       <HoverLabel />

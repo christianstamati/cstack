@@ -40,9 +40,3 @@ test("town mode appends the section; terminal mode doesn't", () => {
   expect(fillBootstrapPrompt(facts, { town: false })).toBe(plain);
   expect(plain).toBe(fillBootstrapPrompt(facts, undefined));
 });
-
-test("catalog blocks are unique; only the sign and the repaint have none", () => {
-  const blocks = SLOTS.flatMap((s) => (s.block ? [s.block.join(",")] : []));
-  expect(new Set(blocks).size).toBe(blocks.length);
-  expect(SLOTS.filter((s) => !s.block).map((s) => s.id)).toEqual(["name", "ui"]);
-});

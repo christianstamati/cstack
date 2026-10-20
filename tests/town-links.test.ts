@@ -8,14 +8,15 @@ type Placements = Partial<Record<SlotId, Placement>>;
 
 function placed(entries: Record<string, string[]>): Placements {
   const placements: Placements = {};
-  for (const [slot, optionIds] of Object.entries(entries)) {
+  Object.entries(entries).forEach(([slot, optionIds], seq) => {
     placements[slot as SlotId] = {
       slot: slot as SlotId,
       optionIds,
       labels: optionIds.length ? optionIds : ["Not needed"],
       auto: optionIds.length === 0,
+      seq,
     };
-  }
+  });
   return placements;
 }
 

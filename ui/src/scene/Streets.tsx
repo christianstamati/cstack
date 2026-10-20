@@ -1,4 +1,4 @@
-// The city's streets and blocks, built as the answers come in. When a block is placed its
+// The city's streets and blocks, built as the answers come in. When a block is taken its
 // streets are paved piece by piece, outward from the roads already there (the first ones
 // from the slab's edge), then their lane markings are painted and crosswalks appear where
 // three streets meet. The block itself rises with its sidewalk, street lamps, trees in
@@ -18,11 +18,11 @@ import {
   type Mesh,
 } from "three";
 
-import { SLOTS, type SlotId } from "../../../src/town/catalog.ts";
 import type { TownState } from "../../../src/town/protocol.ts";
 import { prefersReducedMotion } from "../buildings/Drop.tsx";
-import { lotPosition, seededRandom } from "../logic.ts";
+import { FOUNTAIN_SPOT, seededRandom } from "../logic.ts";
 import {
+  assignBlocks,
   blockCentre,
   builtStreets,
   crossings,
@@ -457,33 +457,31 @@ const Block = memo(function Block({ cell, born }: { cell: Cell; born: number }) 
   );
 });
 
-/** The blocks of the placed slots, and the town square once the paint is chosen. */
+/** The blocks taken so far, and the fountain's square once the paint is chosen. */
 export function Blocks({ state }: { state: TownState }) {
-  const first = useRef<Set<SlotId> | null>(null);
-  const born = useRef(new Map<SlotId, number>());
-  const placed = SLOTS.filter((slot) => slot.block && state.placements[slot.id]);
-  first.current ??= new Set(placed.map((slot) => slot.id));
-  for (const slot of placed)
-    if (!born.current.has(slot.id))
-      born.current.set(
-        slot.id,
-        first.current.has(slot.id) || prefersReducedMotion() ? -Infinity : now(),
-      );
+  const first = useRef<Set<string> | null>(null);
+  const born = useRef(new Map<string, number>());
+  const cells = Object.values(assignBlocks(state.placements));
+  first.current ??= new Set(cells.map((cell) => cell.join(",")));
+  for (const cell of cells) {
+    const key = cell.join(",");
+    if (!born.current.has(key))
+      born.current.set(key, first.current.has(key) || prefersReducedMotion() ? -Infinity : now());
+  }
   useNight((night) => {
     LAMP_HEAD.color.lerpColors(LAMP_DAY, LAMP_NIGHT, night);
     LAMP_HEAD.emissive.copy(LAMP_HEAD.color);
     LAMP_HEAD.emissiveIntensity = 0.1 + night * 1.6;
     LAMP_POOL.opacity = night * 0.32;
   });
-  const [sx, , sz] = lotPosition("ui");
   return (
     <group>
-      {placed.map((slot) => (
-        <Block key={slot.id} cell={slot.block!} born={born.current.get(slot.id)!} />
+      {cells.map((cell) => (
+        <Block key={cell.join(",")} cell={cell} born={born.current.get(cell.join(","))!} />
       ))}
       {state.placements.ui ? (
-        <mesh material={PLAZA} position={[sx, 0.03, sz]} receiveShadow>
-          <cylinderGeometry args={[1.9, 1.95, 0.06, 20]} />
+        <mesh material={PLAZA} position={[FOUNTAIN_SPOT[0], 0.03, FOUNTAIN_SPOT[1]]} receiveShadow>
+          <cylinderGeometry args={[1.45, 1.5, 0.06, 20]} />
         </mesh>
       ) : null}
     </group>

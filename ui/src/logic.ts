@@ -2,31 +2,37 @@
 import { SLOTS, slotById, type SlotDef, type SlotId } from "../../src/town/catalog.ts";
 import type { Placement, TownState } from "../../src/town/protocol.ts";
 import {
+  assignBlocks,
   blockCentre,
-  blockOf,
   ENTRANCE,
   GRID,
   nearStreet,
+  nextBlock,
   SLAB,
-  type Cell,
+  SPIRAL,
   type Point,
 } from "./streets.ts";
+
+type Placements = TownState["placements"];
 
 /** Width of a lot's square, in world units. */
 export const LOT_SIZE = GRID.lot;
 
 /** Where the entrance sign stands: on the green by the entrance road, left of it. */
-const NAME_SPOT: Point = [ENTRANCE[0] - GRID.street / 2 - 1.7, SLAB.maxZ - 1.5];
+export const NAME_SPOT: Point = [ENTRANCE[0] - GRID.street / 2 - 1.7, SLAB.maxZ - 1.5];
 
-/** The paint fountain's town square: the free block in front of the central one. */
-const FOUNTAIN_SPOT: Point = blockCentre([0, 1]);
+/** The paint fountain's little square: on the green, further left of the sign. */
+export const FOUNTAIN_SPOT: Point = [NAME_SPOT[0] - 4.4, SLAB.maxZ - 1.5];
 
-/** Where a slot's lot sits, as [x, y, z]: the middle of its block; the entrance sign by
- * the entrance road and the paint fountain on the town square. */
-export function lotPosition(slot: SlotId): [x: number, y: number, z: number] {
-  const cell = blockOf(slot);
-  const [x, z] = cell ? blockCentre(cell) : slot === "name" ? NAME_SPOT : FOUNTAIN_SPOT;
-  return [x, 0, z];
+/** Where `slot` stands, as [x, z]: the middle of the block it was given, or of the next
+ * free block while it isn't placed yet (where a preview of it floats); the entrance sign
+ * by the entrance road and the paint fountain on its square. */
+export function spotFor(slot: SlotId, placements: Placements): Point {
+  const kind = slotById(slot).kind;
+  if (kind === "sign") return NAME_SPOT;
+  if (kind === "paint") return FOUNTAIN_SPOT;
+  const cell = assignBlocks(placements)[slot] ?? nextBlock(placements) ?? SPIRAL.at(-1)!;
+  return blockCentre(cell);
 }
 
 export function tokenFrom(search: string): string | null {
@@ -96,36 +102,32 @@ export interface DecorSpot {
   rotation: number;
 }
 
-/** The cells of the grid no slot builds on: little parks among the blocks. */
-export function freeCells(): Cell[] {
-  const taken = new Set(SLOTS.flatMap((slot) => (slot.block ? [slot.block.join(",")] : [])));
-  const free: Cell[] = [];
-  for (let column = GRID.min; column <= GRID.max; column++)
-    for (let row = GRID.min; row <= GRID.max; row++)
-      if (!taken.has(`${column},${row}`)) free.push([column, row]);
-  return free;
-}
-
-/** Is (x, z) on a slot's block, or within `margin` of one? */
-function onSlotBlock(x: number, z: number, margin: number): boolean {
-  return SLOTS.some((slot) => {
-    if (!slot.block) return false;
-    const [cx, cz] = blockCentre(slot.block);
+/** Is (x, z) on a block of the grid, or within `margin` of one? Any of them may be built on. */
+function onGrid(x: number, z: number, margin: number): boolean {
+  return SPIRAL.some((cell) => {
+    const [cx, cz] = blockCentre(cell);
     return Math.max(Math.abs(x - cx), Math.abs(z - cz)) < GRID.block / 2 + margin;
   });
 }
 
-/** Trees fill the green belt round the city and the little parks between its blocks; a
- * few rocks lie in the grass. Nothing grows on a slot's block or a street, so the city
- * can be built round them, and everything keeps clear of the signs, props and each other. */
+/** Room kept round the sign's and the fountain's spots: their surveyed plot (and the crane
+ * at its back) plus a tree crown. */
+const PLOT_CLEARANCE = LOT_SIZE / 2 + 0.8;
+
+/** Trees fill the green belt round the city, and a few rocks lie in its grass. Nothing
+ * grows where a block or a street could ever be, so the city can be built round them, and
+ * everything keeps clear of the sign's and the fountain's plots, the props and each other. */
 export function decorSpots(seed = 7): DecorSpot[] {
   const random = seededRandom(seed);
-  const props = Object.values(EXTRA_SPOTS);
+  const props = [EXTRA_SPOTS.ci!, EXTRA_SPOTS.tests!, EXTRA_SPOTS.env!];
   const spots: DecorSpot[] = [];
   const tryPlace = (kind: DecorSpot["kind"], x: number, z: number) => {
-    if (onSlotBlock(x, z, 0.35) || nearStreet(x, z, 0.35)) return false;
-    if (Math.hypot(x - NAME_SPOT[0], z - NAME_SPOT[1]) <= 2.6) return false;
-    if (Math.hypot(x - FOUNTAIN_SPOT[0], z - FOUNTAIN_SPOT[1]) <= 2) return false;
+    if (onGrid(x, z, 0.35) || nearStreet(x, z, 0.35)) return false;
+    for (const [px, pz] of [NAME_SPOT, FOUNTAIN_SPOT]) {
+      if (Math.max(Math.abs(x - px), Math.abs(z - pz)) <= PLOT_CLEARANCE) return false;
+      const mast = craneSpot([px, pz]);
+      if (Math.hypot(x - mast.x, z - mast.z) <= 1.3) return false;
+    }
     if (props.some(([px, pz]) => Math.hypot(x - px, z - pz) <= 1.9)) return false;
     if (spots.some((s) => Math.hypot(x - s.x, z - s.z) < (kind === "tree" ? 1.25 : 1.6)))
       return false;
@@ -149,15 +151,8 @@ export function decorSpots(seed = 7): DecorSpot[] {
     return [SLAB.maxX - depth, along];
   };
   let trees = 0;
-  for (let tries = 0; tries < 4000 && trees < 46; tries++)
+  for (let tries = 0; tries < 5000 && trees < 52; tries++)
     if (tryPlace("tree", ...inBelt())) trees++;
-  for (const cell of freeCells()) {
-    const [cx, cz] = blockCentre(cell);
-    const reach = GRID.block / 2 - 0.5;
-    for (let tries = 0, planted = 0; tries < 200 && planted < 4; tries++)
-      if (tryPlace("tree", cx + (random() * 2 - 1) * reach, cz + (random() * 2 - 1) * reach))
-        planted++;
-  }
   for (let tries = 0, rocks = 0; tries < 600 && rocks < 7; tries++)
     if (tryPlace("rock", ...inBelt())) rocks++;
   return spots;
@@ -330,20 +325,21 @@ export function dropPose(t: number): DropPose {
   return { y, squashY: 1 - 0.28 * squash, squashXZ: 1 + 0.16 * squash };
 }
 
-/** Where each extra stands, as [x, z]. The example and the docs library share the park
- * block; the lighthouse and the watchtower stand in little parks of their own, and the env
- * checkpoint by the entrance road. */
-const PARK = blockCentre(blockOf("extras")!);
-export const EXTRA_SPOTS: Readonly<Record<string, readonly [x: number, z: number]>> = {
-  example: [PARK[0] - 0.95, PARK[1] - 0.7],
-  "agent-docs": [PARK[0] + 0.95, PARK[1] - 0.7],
-  ci: blockCentre([2, 2]),
-  tests: blockCentre([2, -1]),
+/** Where the extras that don't stand on the extras block go: the lighthouse and the
+ * watchtower on the green at the front corners, the env checkpoint by the entrance road. */
+export const EXTRA_SPOTS: Readonly<Record<string, Point>> = {
+  ci: [SLAB.maxX - 1.6, SLAB.maxZ - 1.6],
+  tests: [SLAB.minX + 1.6, SLAB.maxZ - 1.6],
   env: [ENTRANCE[0] + GRID.street / 2 + 1.7, SLAB.maxZ - 1.6],
 };
 
-/** Room on the park block for extras the town has no spot for. */
-const PARK_SPOTS = [
+/** Where the other extras stand on the extras block, from its middle: the example kiosk and
+ * the docs library, then room for extras the town has no spot for. */
+const PARK_SPOTS: Readonly<Record<string, readonly [dx: number, dz: number]>> = {
+  example: [-0.95, -0.7],
+  "agent-docs": [0.95, -0.7],
+};
+const PARK_FREE = [
   [-0.95, 1.05],
   [0.95, 1.05],
   [0, 0.2],
@@ -360,18 +356,24 @@ const CORNERS = [
 
 /** Where a prop stands, as [x, z]. `index` is its position in the answer: sign-in
  * methods fill their block's corners in order, unknown extras the free spots in the park. */
-export function propSpot(slot: SlotId, optionId: string, index: number): [x: number, z: number] {
-  if (slot === "extras") {
-    if (Object.hasOwn(EXTRA_SPOTS, optionId)) {
-      const [x, z] = EXTRA_SPOTS[optionId]!;
-      return [x, z];
-    }
-    const [dx, dz] = PARK_SPOTS[index % PARK_SPOTS.length]!;
-    return [PARK[0] + dx, PARK[1] + dz];
+export function propSpot(
+  slot: SlotId,
+  optionId: string,
+  index: number,
+  placements: Placements,
+): [x: number, z: number] {
+  if (slot === "extras" && Object.hasOwn(EXTRA_SPOTS, optionId)) {
+    const [x, z] = EXTRA_SPOTS[optionId]!;
+    return [x, z];
   }
-  const [lx, , lz] = lotPosition(slot);
-  const [dx, dz] = CORNERS[index % CORNERS.length]!;
-  return [lx + dx, lz + dz];
+  const [bx, bz] = spotFor(slot, placements);
+  const [dx, dz] =
+    slot !== "extras"
+      ? CORNERS[index % CORNERS.length]!
+      : Object.hasOwn(PARK_SPOTS, optionId)
+        ? PARK_SPOTS[optionId]!
+        : PARK_FREE[index % PARK_FREE.length]!;
+  return [bx + dx, bz + dz];
 }
 
 /** The project name for the entrance sign: the typed name if there is one. */
@@ -414,10 +416,20 @@ export function isThinking(state: TownState): boolean {
   return state.pending === null && state.phase === "interview" && !state.agentStopped;
 }
 
-/** The first slot nobody has settled yet, where the crane waits. A slot settled as
- * "not needed" counts as settled, so the crane never waits on a lot nobody will fill. */
-export function nextLot(state: TownState): SlotId | null {
-  return SLOTS.find((slot) => state.placements[slot.id] === undefined)?.id ?? null;
+/** Where the crane waits for the next answer: by the entrance until the name is placed;
+ * then on the next free block while a building or props slot is unsettled; then on the
+ * fountain's square for the paint; null once every slot is settled. A slot settled as "not
+ * needed" counts as settled, so the crane never waits for a building nobody will put up. */
+export function nextLot(state: TownState): Point | null {
+  const { placements } = state;
+  const open = (kinds: SlotDef["kind"][]) =>
+    SLOTS.some((slot) => kinds.includes(slot.kind) && placements[slot.id] === undefined);
+  if (open(["sign"])) return NAME_SPOT;
+  if (open(["building", "props"])) {
+    const cell = nextBlock(placements);
+    return cell ? blockCentre(cell) : null;
+  }
+  return open(["paint"]) ? FOUNTAIN_SPOT : null;
 }
 
 /** Which card the billboard shows. The plan comes before any question; the plan and
@@ -438,10 +450,9 @@ const CRANE_GAP = 0.25;
 /** From the crane's mast to the middle of its lot: the trolley's reach. */
 export const CRANE_REACH = LOT_SIZE / 2 + CRANE_GAP;
 
-/** Where the thinking crane stands for `slot`'s lot: its mast on the block's back
- * sidewalk, between the lot and the street behind it, turned by `yaw` round y so its jib
- * (local +x) reaches out over the lot towards the camera, `reach` to the lot's centre. */
-export function craneSpot(slot: SlotId): { x: number; z: number; yaw: number; reach: number } {
-  const [lx, , lz] = lotPosition(slot);
+/** Where the thinking crane stands for the lot at `at`: its mast on the lot's back side,
+ * between the lot and the street behind it, turned by `yaw` round y so its jib (local +x)
+ * reaches out over the lot towards the camera, `reach` to the lot's centre. */
+export function craneSpot([lx, lz]: Point): { x: number; z: number; yaw: number; reach: number } {
   return { x: lx, z: lz - CRANE_REACH, yaw: -Math.PI / 2, reach: CRANE_REACH };
 }

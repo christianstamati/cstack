@@ -1,12 +1,14 @@
-// The city's grid and its streets, as pure data: where each slot's block sits, which streets
-// are paved for the blocks placed so far, the routes along them and how many cars drive
-// there. No React or three.js, so it can be tested.
+// The city's grid and its streets, as pure data: which block each answer builds on, which
+// streets are paved for the blocks placed so far, the routes along them and how many cars
+// drive there. No React or three.js, so it can be tested.
 //
-// Blocks sit on a square grid, separated by streets. Columns run along x and rows along z;
+// Blocks sit on a square grid, separated by streets. Answers take blocks in the order they
+// come in (their `seq`), spiralling out from the central block, so the town always grows
+// from the middle whatever the interview asks first. Columns run along x and rows along z;
 // +x and +z run towards the default camera, and the entrance is on the +z side. Streets
 // are worked out on a graph whose nodes sit every half block along the street centre-lines:
 // at the crossings, and at the middle of each block's side, where its kerb is.
-import { SLOTS, slotById, type SlotId } from "../../src/town/catalog.ts";
+import { slotById, type SlotId } from "../../src/town/catalog.ts";
 import type { Placement } from "../../src/town/protocol.ts";
 
 export const GRID = {
@@ -62,9 +64,18 @@ export const ENTRANCE: Point = world(ENTRANCE_NODE);
 /** Where the entrance road starts, at the slab's edge. */
 export const ENTRANCE_EDGE: Point = [ENTRANCE[0], SLAB.maxZ];
 
-export function blockOf(slot: SlotId): Cell | null {
-  return slotById(slot).block;
-}
+/** Every cell of the grid in the order blocks are handed out: the centre, then the ring
+ * round it (the sides before the corners), then the outer ring, nearest the middle first. */
+export const SPIRAL: readonly Cell[] = (() => {
+  const cells: Cell[] = [];
+  for (let column = GRID.min; column <= GRID.max; column++)
+    for (let row = GRID.min; row <= GRID.max; row++) cells.push([column, row]);
+  const ring = ([c, r]: Cell) => Math.max(Math.abs(c), Math.abs(r));
+  const reach = ([c, r]: Cell) => Math.abs(c) + Math.abs(r);
+  // Within a ring and distance: round from the left (-x), through the back, to the front.
+  const turn = ([c, r]: Cell) => (Math.atan2(-r, -c) + 2 * Math.PI) % (2 * Math.PI);
+  return cells.sort((a, b) => ring(a) - ring(b) || reach(a) - reach(b) || turn(a) - turn(b));
+})();
 
 export function blockCentre([column, row]: Cell): Point {
   return [column * PITCH, row * PITCH];
@@ -75,11 +86,38 @@ function kerbNode([column, row]: Cell): Node {
   return [2 * column, 2 * row + 1];
 }
 
-/** Where traffic for `slot` stops: the kerb in front of its block. The entrance sign and
- * the repaint have no block; theirs is the entrance. */
-export function kerbOf(slot: SlotId): Point {
-  const cell = blockOf(slot);
-  return cell ? world(kerbNode(cell)) : ENTRANCE;
+/** Where traffic for a block stops: the middle of its front kerb. */
+export function kerbOf(cell: Cell): Point {
+  return world(kerbNode(cell));
+}
+
+type Placements = Partial<Record<SlotId, Placement>>;
+
+/** Does this placement build on a block? Buildings and props do; the name is the entrance
+ * sign, the paint has none, and "not needed" puts nothing in the town. */
+export function takesBlock(placement: Placement | undefined): placement is Placement {
+  if (!placement || placement.optionIds.length === 0) return false;
+  const kind = slotById(placement.slot).kind;
+  return kind === "building" || kind === "props";
+}
+
+/** The block each placement builds on: the k-th placement that takes a block (by seq) gets
+ * the k-th cell of the spiral. A re-answer keeps its seq, so it keeps its block. */
+export function assignBlocks(placements: Placements): Partial<Record<SlotId, Cell>> {
+  const taking = Object.values(placements)
+    .filter(takesBlock)
+    .sort((a, b) => a.seq - b.seq);
+  const blocks: Partial<Record<SlotId, Cell>> = {};
+  taking.forEach((placement, k) => {
+    const cell = SPIRAL[k];
+    if (cell) blocks[placement.slot] = cell;
+  });
+  return blocks;
+}
+
+/** The block the next building will take, or null once the grid is full. */
+export function nextBlock(placements: Placements): Cell | null {
+  return SPIRAL[Object.values(placements).filter(takesBlock).length] ?? null;
 }
 
 const near = (value: number) => Math.abs(value - Math.round(value)) < 1e-6;
@@ -156,28 +194,19 @@ function blockStreets([column, row]: Cell): Array<[Node, Node]> {
   ];
 }
 
-const isPlaced = (placements: Partial<Record<SlotId, Placement>>, slot: SlotId) =>
-  placements[slot] !== undefined;
-
-/** The slots placed so far that have a block. */
-function placedBlocks(placements: Partial<Record<SlotId, Placement>>): Cell[] {
-  return SLOTS.flatMap((slot) => (slot.block && isPlaced(placements, slot.id) ? [slot.block] : []));
-}
-
 /** The grid pieces paved for these placements (the entrance road aside). */
-function gridStreets(placements: Partial<Record<SlotId, Placement>>): Array<[Node, Node]> {
+function gridStreets(placements: Placements): Array<[Node, Node]> {
   const pieces = new Map<string, [Node, Node]>();
-  for (const cell of placedBlocks(placements))
+  for (const cell of Object.values(assignBlocks(placements)))
     for (const piece of blockStreets(cell))
       pieces.set(`${nodeKey(piece[0])}|${nodeKey(piece[1])}`, piece);
   return [...pieces.values()];
 }
 
 /** Every street paved for these placements: nothing on bare land; the entrance road once
- * anything is placed (the name sign stands by it); and for each placed block, the streets
- * round it and on to the entrance. A placement only ever adds streets, and the result
- * doesn't depend on the order the answers came in. */
-export function builtStreets(placements: Partial<Record<SlotId, Placement>>): Segment[] {
+ * anything is placed (the name sign stands by it); and for each block taken, the streets
+ * round it and on to the entrance. A new placement only ever adds streets. */
+export function builtStreets(placements: Placements): Segment[] {
   if (!Object.values(placements).some(Boolean)) return [];
   const entrance: Segment = { a: ENTRANCE, b: ENTRANCE_EDGE };
   return [
@@ -186,28 +215,24 @@ export function builtStreets(placements: Partial<Record<SlotId, Placement>>): Se
   ];
 }
 
-/** Every slot placed, for routes on the finished city. */
-const EVERYTHING: Partial<Record<SlotId, Placement>> = Object.fromEntries(
-  SLOTS.map((slot) => [slot.id, { slot: slot.id, optionIds: [], labels: [], auto: true }]),
-);
-
-function kerbNodeOf(slot: SlotId): Node {
-  const cell = blockOf(slot);
-  return cell ? kerbNode(cell) : ENTRANCE_NODE;
+/** Where a slot's traffic starts: its block's kerb, or the entrance for the sign and the
+ * paint; null when it has no place in the town (not placed, or not needed). */
+function kerbNodeOf(slot: SlotId, placements: Placements): Node | null {
+  const placement = placements[slot];
+  if (!placement) return null;
+  const kind = slotById(slot).kind;
+  if (kind === "sign" || kind === "paint") return ENTRANCE_NODE;
+  const cell = assignBlocks(placements)[slot];
+  return cell ? kerbNode(cell) : null;
 }
 
-/** The way from kerb `a` to kerb `b` along the streets built for `placements` (the whole
- * city when left out): its start, its corners and its end, each leg along one street.
- * The shortest way, turning as little as it can; empty when either end isn't connected. */
-export function streetRoute(
-  a: SlotId,
-  b: SlotId,
-  placements: Partial<Record<SlotId, Placement>> = EVERYTHING,
-): Point[] {
-  if (!isPlaced(placements, a) || !isPlaced(placements, b)) return [];
-  const start = kerbNodeOf(a);
-  const goal = kerbNodeOf(b);
-  if (nodeKey(start) === nodeKey(goal)) return [];
+/** The way from `a`'s kerb to `b`'s along the streets built for `placements`: its start,
+ * its corners and its end, each leg along one street. The shortest way, turning as little
+ * as it can; empty when either end has no place in the town. */
+export function streetRoute(a: SlotId, b: SlotId, placements: Placements): Point[] {
+  const start = kerbNodeOf(a, placements);
+  const goal = kerbNodeOf(b, placements);
+  if (!start || !goal || nodeKey(start) === nodeKey(goal)) return [];
   const neighbours = new Map<string, Node[]>();
   for (const [p, q] of gridStreets(placements)) {
     neighbours.set(nodeKey(p), [...(neighbours.get(nodeKey(p)) ?? []), q]);
@@ -252,8 +277,8 @@ export function streetRoute(
 
 /** How many cars drive round the town: none until two blocks stand (and so are linked by
  * a street), then one for every two blocks, six at most. */
-export function carCount(placements: Partial<Record<SlotId, Placement>>): number {
-  const blocks = placedBlocks(placements).length;
+export function carCount(placements: Placements): number {
+  const blocks = Object.keys(assignBlocks(placements)).length;
   return blocks < 2 ? 0 : Math.min(6, Math.floor(blocks / 2));
 }
 

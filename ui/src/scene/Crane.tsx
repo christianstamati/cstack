@@ -6,7 +6,6 @@ import { useFrame } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, type RefObject } from "react";
 import { Vector3, type Group } from "three";
 
-import { SLOTS, type SlotId } from "../../../src/town/catalog.ts";
 import type { TownState } from "../../../src/town/protocol.ts";
 import { prefersReducedMotion } from "../buildings/Drop.tsx";
 import { Blinker, Box, Cyl, Frame, PaintedText, STONE, Win, WOOD } from "../buildings/kit.tsx";
@@ -142,10 +141,6 @@ function CableAbove() {
   );
 }
 
-/** Where the crane stands for each slot, worked out once (the frame loop reads it). */
-const SPOTS = new Map(SLOTS.map((slot) => [slot.id, craneSpot(slot.id)]));
-const spot = (slot: SlotId | null) => (slot ? SPOTS.get(slot)! : null);
-
 // The status label's element, moved by the crane every frame without re-rendering React.
 let labelElement: HTMLDivElement | null = null;
 
@@ -154,13 +149,17 @@ const POP_RATE = 7;
 
 export function Crane({ state }: { state: TownState }) {
   const thinking = isThinking(state);
-  const target = thinking ? nextLot(state) : null;
+  const lot = thinking ? nextLot(state) : null;
+  // The lot as a key, and where the crane stands for it (worked out once per lot).
+  const target = lot ? lot.join(",") : null;
+  const targetSpot = useMemo(() => (lot ? craneSpot(lot) : null), [target]);
   const root = useRef<Group>(null);
   const top = useRef<Group>(null);
   const trolley = useRef<Group>(null);
   const hook = useRef<Group>(null);
   // The lot the crane stands at now; it only moves while folded away.
-  const shown = useRef<SlotId | null>(null);
+  const shown = useRef<string | null>(null);
+  const shownSpot = useRef<ReturnType<typeof craneSpot> | null>(null);
   const scale = useRef(0);
   const anchor = useMemo(() => new Vector3(), []);
   const still = useMemo(prefersReducedMotion, []);
@@ -170,7 +169,8 @@ export function Crane({ state }: { state: TownState }) {
     if (!group) return;
     if (shown.current !== target && scale.current < 0.02) {
       shown.current = target;
-      const at = spot(target);
+      shownSpot.current = targetSpot;
+      const at = targetSpot;
       if (at) {
         group.position.set(at.x, 0, at.z);
         group.rotation.y = at.yaw;
@@ -198,7 +198,7 @@ export function Crane({ state }: { state: TownState }) {
       element.style.visibility = "visible";
       return;
     }
-    const at = spot(shown.current);
+    const at = shownSpot.current;
     if (!at || scale.current < 0.6) {
       element.style.visibility = "hidden";
       return;

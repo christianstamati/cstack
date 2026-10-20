@@ -121,29 +121,45 @@ function CarModel({ index }: { index: number }) {
   );
 }
 
+/** A street leaving a node: where it goes, that node's key and the street's key. */
+interface Way {
+  to: Point;
+  toKey: string;
+  road: string;
+}
+
+/** Reused by `turnOnto`, so turning never allocates. */
+const choices: Way[] = [];
+
 /** At the end of its street: on to a paved street with room at its start, not back the
- * way it came unless that's the only way; or wait. */
+ * way it came unless that's the only way; or wait there. An impatient car stops minding
+ * the room. */
 function turnOnto(
   car: Car,
   list: Car[],
-  graph: Map<string, Point[]>,
+  graph: Map<string, Way[]>,
   random: () => number,
   patient: boolean,
 ): void {
-  const options = (graph.get(car.toKey) ?? []).filter((p) => {
-    if (!isPaved(segmentKey({ a: car.to, b: p }))) return false;
-    const pKey = key(p);
-    return !list.some(
-      (other) =>
-        other !== car &&
-        other.fromKey === car.toKey &&
-        other.toKey === pKey &&
-        other.travelled < GAP &&
-        patient,
-    );
-  });
-  const onward = options.filter((p) => key(p) !== car.fromKey);
-  const choices = onward.length > 0 ? onward : options;
+  choices.length = 0;
+  let back: Way | null = null;
+  for (const way of graph.get(car.toKey) ?? []) {
+    if (!isPaved(way.road)) continue;
+    let room = true;
+    if (patient)
+      for (const other of list)
+        if (
+          other !== car &&
+          other.fromKey === car.toKey &&
+          other.toKey === way.toKey &&
+          other.travelled < GAP
+        )
+          room = false;
+    if (!room) continue;
+    if (way.toKey === car.fromKey) back = way;
+    else choices.push(way);
+  }
+  if (choices.length === 0 && back) choices.push(back);
   if (choices.length === 0) {
     car.travelled = car.length;
     return;
@@ -151,10 +167,10 @@ function turnOnto(
   const next = choices[Math.floor(random() * choices.length)]!;
   car.from = car.to;
   car.fromKey = car.toKey;
-  car.to = next;
-  car.toKey = key(next);
+  car.to = next.to;
+  car.toKey = next.toKey;
   car.travelled = 0;
-  car.length = Math.abs(next[0] - car.from[0]) + Math.abs(next[1] - car.from[1]);
+  car.length = Math.abs(next.to[0] - car.from[0]) + Math.abs(next.to[1] - car.from[1]);
 }
 
 export function Traffic({ state }: { state: TownState }) {
@@ -162,11 +178,13 @@ export function Traffic({ state }: { state: TownState }) {
   const segments = useMemo(() => builtStreets(state.placements), [state.placements]);
   // Who's next to whom, on the city's streets (not the entrance road: cars only come in).
   const graph = useMemo(() => {
-    const next = new Map<string, Point[]>();
-    for (const { a, b } of segments) {
-      if (key(b) === EDGE_KEY || key(a) === EDGE_KEY) continue;
-      next.set(key(a), [...(next.get(key(a)) ?? []), b]);
-      next.set(key(b), [...(next.get(key(b)) ?? []), a]);
+    const next = new Map<string, Way[]>();
+    for (const segment of segments) {
+      const [aKey, bKey] = [key(segment.a), key(segment.b)];
+      if (aKey === EDGE_KEY || bKey === EDGE_KEY) continue;
+      const road = segmentKey(segment);
+      next.set(aKey, [...(next.get(aKey) ?? []), { to: segment.b, toKey: bKey, road }]);
+      next.set(bKey, [...(next.get(bKey) ?? []), { to: segment.a, toKey: aKey, road }]);
     }
     return next;
   }, [segments]);
@@ -188,7 +206,9 @@ export function Traffic({ state }: { state: TownState }) {
     const held = crossingsHeld.current;
     // New cars drive in from the slab's edge, one at a time.
     while (list.length < count) {
-      const entering = list.some((car) => car.fromKey === EDGE_KEY && car.travelled < 2 * GAP);
+      let entering = false;
+      for (const car of list)
+        if (car.fromKey === EDGE_KEY && car.travelled < 2 * GAP) entering = true;
       if (entering || !isPaved(ENTRANCE_ROAD)) break;
       list.push({
         from: ENTRANCE_EDGE,
@@ -207,7 +227,8 @@ export function Traffic({ state }: { state: TownState }) {
     for (let index = 0; index < list.length; index++) {
       const car = list[index]!;
       const patient = car.waited < PATIENCE;
-      let move = SPEED * delta;
+      // Waiting at the end of its street for a way on: no moving, and patience runs out.
+      let move = car.travelled >= car.length ? 0 : SPEED * delta;
       // Queue behind the car in front on the same lane.
       for (const other of list) {
         if (other === car || other.fromKey !== car.fromKey || other.toKey !== car.toKey) continue;
@@ -224,10 +245,14 @@ export function Traffic({ state }: { state: TownState }) {
           car.holding = car.toKey;
         }
       }
-      car.travelled += move;
+      car.travelled = Math.min(car.travelled + move, car.length);
       car.waited = move < SPEED * delta * 0.2 ? car.waited + delta : 0;
-
-      if (car.travelled >= car.length) turnOnto(car, list, graph, random, patient);
+      if (car.travelled >= car.length) {
+        const at = car.toKey;
+        turnOnto(car, list, graph, random, patient);
+        // Turned onto a new street: the wait is over.
+        if (car.fromKey === at) car.waited = 0;
+      }
       // Leave the crossing behind once past it.
       if (car.holding && car.holding !== car.toKey && car.travelled > CROSSING) {
         if (held.get(car.holding) === car) held.delete(car.holding);

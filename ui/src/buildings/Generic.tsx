@@ -1,5 +1,4 @@
-// The fallbacks: a plain building for an option the town has no model for, and the small
-// marker on a lot whose slot doesn't apply to the chosen stack.
+// The fallback: a plain building for an option the town has no model for.
 import {
   Box,
   Cyl,
@@ -34,31 +33,6 @@ export function Generic({ label, stage, theme }: BuildingProps) {
         h={0.42}
         color={WHITE}
         ink={INK}
-      />
-    </Frame>
-  );
-}
-
-/** A slot that doesn't apply (e.g. no separate database with Convex): a small grey sign
- * with a dash on an otherwise empty lot. */
-export function NotNeeded({ stage, theme }: Omit<BuildingProps, "label">) {
-  return (
-    <Frame stage={stage} theme={theme}>
-      <Cyl position={[0, 0.35, 0]} r={0.05} h={0.7} seg={5} color="#8a8698" />
-      <Box position={[0, 0.72, 0]} size={[0.62, 0.36, 0.08]} color="#b3b0bf" />
-      <Box
-        position={[0, 0.72, 0.05]}
-        size={[0.32, 0.07, 0.02]}
-        color="#6f6b80"
-        sharp
-        shadow={false}
-      />
-      <Box
-        position={[0, 0.72, -0.05]}
-        size={[0.32, 0.07, 0.02]}
-        color="#6f6b80"
-        sharp
-        shadow={false}
       />
     </Frame>
   );

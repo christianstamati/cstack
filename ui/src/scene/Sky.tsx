@@ -57,7 +57,7 @@ function ease(current: SkyLook, target: SkyLook, t: number): void {
   const length = Math.hypot(...direction);
   // Across the horizon the light swaps from sun to moon while it is all but out.
   if (length > 1e-3) for (let i = 0; i < 3; i++) direction[i] = direction[i]! / length;
-  else current.light.direction = [...target.light.direction];
+  else for (let i = 0; i < 3; i++) direction[i] = target.light.direction[i]!;
   easeRGB(current.ambient.color, target.ambient.color, t);
   current.ambient.intensity = mix(current.ambient.intensity, target.ambient.intensity, t);
   easeRGB(current.hemisphere.sky, target.hemisphere.sky, t);
@@ -69,8 +69,19 @@ function ease(current: SkyLook, target: SkyLook, t: number): void {
   current.dusk = mix(current.dusk, target.dusk, t);
 }
 
-const css = ([r, g, b]: RGB) =>
-  `rgb(${Math.round(r * 255)} ${Math.round(g * 255)} ${Math.round(b * 255)})`;
+/** The backdrop's values as whole numbers: the gradient's two colours (0–255 a channel),
+ * then the stars' and the moon's opacity (in hundredths). Strings are only built when one
+ * of them changes. */
+const BACKDROP = ["top", "bottom", "stars", "moon"] as const;
+
+function quantise(look: SkyLook, into: Int16Array): void {
+  for (let i = 0; i < 3; i++) {
+    into[i] = Math.round(look.top[i]! * 255);
+    into[3 + i] = Math.round(look.bottom[i]! * 255);
+  }
+  into[6] = Math.round((1 - smoothstep(0.05, 0.4, look.daylight)) * 100);
+  into[7] = Math.round((1 - smoothstep(0.1, 0.55, look.daylight)) * 100);
+}
 
 function smoothstep(from: number, to: number, x: number): number {
   const t = Math.min(Math.max((x - from) / (to - from), 0), 1);
@@ -90,7 +101,8 @@ export function Sky() {
     object.position.set(...CENTRE);
     return object;
   }, []);
-  const written = useRef({ top: "", bottom: "", stars: "", moon: "" });
+  const written = useMemo(() => new Int16Array(8).fill(-1), []);
+  const fresh = useMemo(() => new Int16Array(8), []);
 
   useEffect(() => {
     const id = window.setInterval(() => {
@@ -126,17 +138,20 @@ export function Sky() {
 
     const element = backdrop;
     if (!element) return;
-    const values = {
-      top: css(look.top),
-      bottom: css(look.bottom),
-      stars: (1 - smoothstep(0.05, 0.4, look.daylight)).toFixed(2),
-      moon: (1 - smoothstep(0.1, 0.55, look.daylight)).toFixed(2),
-    };
-    const last = written.current;
-    for (const key of ["top", "bottom", "stars", "moon"] as const) {
-      if (values[key] === last[key]) continue;
-      element.style.setProperty(`--sky-${key}`, values[key]);
-      last[key] = values[key];
+    quantise(look, fresh);
+    for (let k = 0; k < BACKDROP.length; k++) {
+      // The colours take three numbers each; the opacities one.
+      const from = k < 2 ? k * 3 : 4 + k;
+      const to = k < 2 ? from + 3 : from + 1;
+      let same = true;
+      for (let i = from; i < to; i++) if (fresh[i] !== written[i]) same = false;
+      if (same) continue;
+      for (let i = from; i < to; i++) written[i] = fresh[i]!;
+      const value =
+        k < 2
+          ? `rgb(${fresh[from]} ${fresh[from + 1]} ${fresh[from + 2]})`
+          : String(fresh[from]! / 100);
+      element.style.setProperty(`--sky-${BACKDROP[k]}`, value);
     }
   });
 

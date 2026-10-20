@@ -27,6 +27,9 @@ export interface Placement {
   /** True when the agent settled this without asking. */
   auto: boolean;
   reason?: string;
+  /** The order slots were first placed in (0, 1, 2, …): the town hands out its blocks in
+   * this order. Re-answering a slot keeps its seq. */
+  seq: number;
 }
 
 export interface PlanView {

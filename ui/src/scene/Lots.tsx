@@ -2,7 +2,7 @@
 // wooden stakes and a taut orange string, like a builder's plot. Only the crane's target is
 // marked; the rest of the land stays bare until its answer comes.
 import type { TownState } from "../../../src/town/protocol.ts";
-import { isThinking, LOT_SIZE, lotPosition, nextLot } from "../logic.ts";
+import { isThinking, LOT_SIZE, nextLot } from "../logic.ts";
 import { CITY } from "./palette.ts";
 
 const STAKE_HEIGHT = 0.55;
@@ -11,7 +11,7 @@ const STRING_HEIGHT = 0.4;
 export function SurveyPlot({ state }: { state: TownState }) {
   const target = isThinking(state) ? nextLot(state) : null;
   if (!target) return null;
-  const [x, , z] = lotPosition(target);
+  const [x, z] = target;
   const half = LOT_SIZE / 2;
   const corners = [
     [-half, -half],
@@ -20,7 +20,7 @@ export function SurveyPlot({ state }: { state: TownState }) {
     [-half, half],
   ] as const;
   return (
-    <group key={target} position={[x, 0, z]}>
+    <group key={target.join(",")} position={[x, 0, z]}>
       {corners.map(([cx, cz]) => (
         <group key={`${cx},${cz}`} position={[cx, 0, cz]}>
           <mesh position={[0, STAKE_HEIGHT / 2, 0]} castShadow>

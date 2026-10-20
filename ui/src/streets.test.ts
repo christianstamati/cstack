@@ -3,31 +3,33 @@ import { expect, test } from "vite-plus/test";
 import { SLOTS, type SlotId } from "../../src/town/catalog.ts";
 import type { Placement } from "../../src/town/protocol.ts";
 import {
+  assignBlocks,
   blockCentre,
-  blockOf,
   builtStreets,
   carCount,
   crossings,
   ENTRANCE,
   GRID,
   kerbOf,
+  nextBlock,
   onStreetLine,
   pavingOrder,
   PITCH,
   segmentKey,
+  SPIRAL,
   streetRoute,
   trailLanes,
+  type Cell,
   type Point,
   type Segment,
 } from "./streets.ts";
 
 type Placements = Partial<Record<SlotId, Placement>>;
 
-const BLOCK_SLOTS = SLOTS.filter((slot) => slot.block !== null).map((slot) => slot.id);
-
+/** The slots in the order given, each with its first option (seq = position). */
 function placed(...slots: SlotId[]): Placements {
   const placements: Placements = {};
-  for (const id of slots) {
+  slots.forEach((id, seq) => {
     const slot = SLOTS.find((s) => s.id === id)!;
     const option = slot.options[0];
     placements[id] = {
@@ -35,15 +37,27 @@ function placed(...slots: SlotId[]): Placements {
       optionIds: option ? [option.id] : [],
       labels: [option?.label ?? "shop"],
       auto: false,
+      seq,
     };
-  }
+  });
   return placements;
 }
 
+const notNeeded = (slot: SlotId, seq: number): Placement => ({
+  slot,
+  optionIds: [],
+  labels: ["Not needed"],
+  auto: true,
+  seq,
+});
+
+/** Every slot, in the interview's order. */
 const ALL = placed(...SLOTS.map((slot) => slot.id));
+const LOT_SLOTS = SLOTS.filter((s) => s.kind === "building" || s.kind === "props").map((s) => s.id);
 
 const keys = (segments: Segment[]) => new Set(segments.map(segmentKey));
 const same = (a: Point, b: Point) => Math.abs(a[0] - b[0]) < 1e-9 && Math.abs(a[1] - b[1]) < 1e-9;
+const ring = ([c, r]: Cell) => Math.max(Math.abs(c), Math.abs(r));
 const length = (route: Point[]) =>
   route
     .slice(1)
@@ -58,15 +72,30 @@ function onStreet(x: number, z: number): boolean {
   return distance(x) < GRID.street / 2 || distance(z) < GRID.street / 2;
 }
 
-test("every slot with a block has its own cell inside the city, its lot off the streets", () => {
-  const cells = new Set<string>();
-  for (const id of BLOCK_SLOTS) {
-    const cell = blockOf(id)!;
-    for (const c of cell) {
-      expect(c).toBeGreaterThanOrEqual(GRID.min);
-      expect(c).toBeLessThanOrEqual(GRID.max);
+/** Every half-block piece of a route is in `built`. */
+function onBuilt(route: Point[], built: Set<string>): boolean {
+  for (let i = 1; i < route.length; i++) {
+    const [p, q] = [route[i - 1]!, route[i]!];
+    const steps = Math.round((Math.abs(q[0] - p[0]) + Math.abs(q[1] - p[1])) / (PITCH / 2));
+    for (let s = 0; s < steps; s++) {
+      const at = (t: number): Point => [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t];
+      if (!built.has(segmentKey({ a: at(s / steps), b: at((s + 1) / steps) }))) return false;
     }
-    cells.add(cell.join(","));
+  }
+  return true;
+}
+
+test("the spiral starts in the middle and covers the grid ring by ring", () => {
+  expect(SPIRAL[0]).toEqual([0, 0]);
+  const cells = new Set(SPIRAL.map((cell) => cell.join(",")));
+  const size = GRID.max - GRID.min + 1;
+  expect(cells.size).toBe(SPIRAL.length);
+  expect(SPIRAL.length).toBe(size * size);
+  // Room for every slot that can take a block.
+  expect(SPIRAL.length).toBeGreaterThanOrEqual(LOT_SLOTS.length);
+  for (let i = 1; i < SPIRAL.length; i++)
+    expect(ring(SPIRAL[i]!)).toBeGreaterThanOrEqual(ring(SPIRAL[i - 1]!));
+  for (const cell of SPIRAL) {
     const [x, z] = blockCentre(cell);
     const half = GRID.lot / 2;
     for (const [dx, dz] of [
@@ -76,36 +105,62 @@ test("every slot with a block has its own cell inside the city, its lot off the 
       [half, half],
       [0, 0],
     ])
-      expect(onStreet(x + dx!, z + dz!), `${id}'s lot on a street`).toBe(false);
+      expect(onStreet(x + dx!, z + dz!), `${cell.join(",")} lot on a street`).toBe(false);
   }
-  expect(cells.size).toBe(BLOCK_SLOTS.length);
-  expect(blockOf("name")).toBeNull();
-  expect(blockOf("ui")).toBeNull();
 });
 
-test("the city grows from the middle: frontend in the centre, rings never shrink in fill order", () => {
-  expect(blockOf("frontend")).toEqual([0, 0]);
-  const ring = (id: SlotId) => Math.max(...blockOf(id)!.map(Math.abs));
-  const buildings = SLOTS.filter((slot) => slot.kind === "building").map((slot) => ring(slot.id));
-  for (let i = 1; i < buildings.length; i++)
-    expect(buildings[i]).toBeGreaterThanOrEqual(buildings[i - 1]!);
-  expect(ring("data")).toBe(1);
-  for (const id of ["api", "auth", "database", "dbHost"] as const) expect(ring(id)).toBe(1);
-  for (const id of ["deploy", "structure", "toolchain", "packageManager", "extras"] as const)
-    expect(ring(id)).toBe(2);
+test("buildings take blocks in the order they are placed, from the centre out", () => {
+  // The interview asks the structure first: it gets the central block.
+  const blocks = assignBlocks(placed("name", "structure", "toolchain", "frontend"));
+  expect(blocks.structure).toEqual(SPIRAL[0]);
+  expect(blocks.toolchain).toEqual(SPIRAL[1]);
+  expect(blocks.frontend).toEqual(SPIRAL[2]);
+  expect(blocks.name).toBeUndefined();
+  // The same slots placed the other way round.
+  const reversed = assignBlocks(placed("frontend", "toolchain", "structure"));
+  expect(reversed.frontend).toEqual(SPIRAL[0]);
+  expect(reversed.structure).toEqual(SPIRAL[2]);
+  // Every lot slot of the whole interview gets its own block, in seq order.
+  const all = assignBlocks(ALL);
+  const order = SLOTS.filter((s) => LOT_SLOTS.includes(s.id)).map((s) => all[s.id]);
+  expect(order).toEqual(SPIRAL.slice(0, order.length));
+});
+
+test("not needed, the name and the paint take no block; nor do they hold one up", () => {
+  const placements = placed("name", "structure", "toolchain", "ui");
+  placements.api = notNeeded("api", 1);
+  const blocks = assignBlocks(placements);
+  expect(blocks.api).toBeUndefined();
+  expect(blocks.ui).toBeUndefined();
+  expect(blocks.name).toBeUndefined();
+  expect(blocks.structure).toEqual(SPIRAL[0]);
+  expect(blocks.toolchain).toEqual(SPIRAL[1]);
+  expect(nextBlock(placements)).toEqual(SPIRAL[2]);
+  expect(nextBlock({})).toEqual(SPIRAL[0]);
+});
+
+test("re-answering a slot keeps its block", () => {
+  const placements = placed("structure", "frontend", "data");
+  const before = assignBlocks(placements);
+  placements.frontend = {
+    ...placements.frontend!,
+    optionIds: ["tanstack-start"],
+    labels: ["TanStack"],
+  };
+  expect(assignBlocks(placements)).toEqual(before);
 });
 
 test("no streets on bare land; the name paves the entrance road only", () => {
   expect(builtStreets({})).toEqual([]);
   const entrance = builtStreets(placed("name"));
   expect(entrance).toHaveLength(1);
-  const [road] = entrance;
-  expect(same(road!.a, ENTRANCE) || same(road!.b, ENTRANCE)).toBe(true);
+  expect(same(entrance[0]!.a, ENTRANCE) || same(entrance[0]!.b, ENTRANCE)).toBe(true);
+  // Not-needed answers build nothing either.
+  expect(builtStreets({ api: notNeeded("api", 0) })).toHaveLength(1);
 });
 
 test("built streets are axis-aligned pieces of street centre-lines", () => {
-  for (const segment of builtStreets(ALL)) {
-    const { a, b } = segment;
+  for (const { a, b } of builtStreets(ALL)) {
     expect(a[0] === b[0] || a[1] === b[1]).toBe(true);
     expect(same(a, b)).toBe(false);
     for (const p of [a, b]) expect(onStreetLine(p)).toBe(true);
@@ -130,66 +185,59 @@ function reachable(segments: Segment[], start: Point): Set<string> {
   return seen;
 }
 
-test("every placed block's kerb is connected to the entrance, whatever comes first", () => {
-  for (const id of BLOCK_SLOTS) {
-    const placements = placed(id);
-    const nodes = reachable(builtStreets(placements), ENTRANCE);
-    const [x, z] = kerbOf(id);
-    expect(nodes.has(`${x.toFixed(3)},${z.toFixed(3)}`), id).toBe(true);
-  }
-  const all = reachable(builtStreets(ALL), ENTRANCE);
-  for (const id of BLOCK_SLOTS) {
-    const [x, z] = kerbOf(id);
-    expect(all.has(`${x.toFixed(3)},${z.toFixed(3)}`), id).toBe(true);
+test("every block's kerb is connected to the entrance", () => {
+  const nodes = reachable(builtStreets(ALL), ENTRANCE);
+  for (const cell of Object.values(assignBlocks(ALL))) {
+    const [x, z] = kerbOf(cell);
+    expect(nodes.has(`${x.toFixed(3)},${z.toFixed(3)}`), cell.join(",")).toBe(true);
   }
 });
 
-test("the streets only grow as blocks are added, in any order", () => {
+test("the streets only grow as answers come in, in any order", () => {
   const random = (seed: number) => () => (seed = (seed * 16807) % 2147483647) / 2147483647;
   for (let run = 0; run < 20; run++) {
     const next = random(run + 1);
     const order = SLOTS.map((s) => s.id).sort(() => next() - 0.5);
     let before = new Set<string>();
     for (let i = 1; i <= order.length; i++) {
-      const after = keys(builtStreets(placed(...order.slice(0, i))));
+      const placements = placed(...order.slice(0, i));
+      // Every third slot turns out not to be needed.
+      for (const id of order.slice(0, i))
+        if (order.indexOf(id) % 3 === 2) placements[id] = notNeeded(id, order.indexOf(id));
+      const after = keys(builtStreets(placements));
       for (const key of before) expect(after.has(key)).toBe(true);
       before = after;
     }
-    expect(before).toEqual(keys(builtStreets(ALL)));
   }
 });
 
 test("a route runs along built streets from one kerb to the other", () => {
   const built = keys(builtStreets(ALL));
-  for (const a of BLOCK_SLOTS)
-    for (const b of BLOCK_SLOTS) {
+  const blocks = assignBlocks(ALL);
+  for (const a of LOT_SLOTS)
+    for (const b of LOT_SLOTS) {
       if (a === b) continue;
       const route = streetRoute(a, b, ALL);
       expect(route.length).toBeGreaterThanOrEqual(2);
-      expect(same(route[0]!, kerbOf(a))).toBe(true);
-      expect(same(route.at(-1)!, kerbOf(b))).toBe(true);
+      expect(same(route[0]!, kerbOf(blocks[a]!))).toBe(true);
+      expect(same(route.at(-1)!, kerbOf(blocks[b]!))).toBe(true);
       for (let i = 1; i < route.length; i++) {
         const [p, q] = [route[i - 1]!, route[i]!];
         expect(same(p, q)).toBe(false);
         expect(p[0] === q[0] || p[1] === q[1]).toBe(true);
-        // Every half-block piece of the leg is a built street.
-        const steps = Math.round((Math.abs(q[0] - p[0]) + Math.abs(q[1] - p[1])) / (PITCH / 2));
-        for (let s = 0; s < steps; s++) {
-          const t0 = s / steps;
-          const t1 = (s + 1) / steps;
-          const from: Point = [p[0] + (q[0] - p[0]) * t0, p[1] + (q[1] - p[1]) * t0];
-          const to: Point = [p[0] + (q[0] - p[0]) * t1, p[1] + (q[1] - p[1]) * t1];
-          expect(built.has(segmentKey({ a: from, b: to })), `${a}→${b}`).toBe(true);
-        }
       }
+      expect(onBuilt(route, built), `${a}→${b}`).toBe(true);
     }
+  // The paint has no block: its links start at the entrance.
+  expect(same(streetRoute("ui", "frontend", ALL)[0]!, ENTRANCE)).toBe(true);
 });
 
 test("neighbours are linked by a short route, not around the city", () => {
-  for (const a of BLOCK_SLOTS)
-    for (const b of BLOCK_SLOTS) {
-      const [ai, aj] = blockOf(a)!;
-      const [bi, bj] = blockOf(b)!;
+  const blocks = assignBlocks(ALL);
+  for (const a of LOT_SLOTS)
+    for (const b of LOT_SLOTS) {
+      const [ai, aj] = blocks[a]!;
+      const [bi, bj] = blocks[b]!;
       if (Math.abs(ai - bi) + Math.abs(aj - bj) !== 1) continue;
       // Kerbs on the same street: straight along it; one row apart: round one corner.
       expect(length(streetRoute(a, b, ALL)), `${a}→${b}`).toBeLessThanOrEqual(2 * PITCH + 1e-9);
@@ -198,52 +246,33 @@ test("neighbours are linked by a short route, not around the city", () => {
 
 test("a route only uses the streets built so far", () => {
   const placements = placed("name", "frontend", "deploy");
-  const built = keys(builtStreets(placements));
   const route = streetRoute("frontend", "deploy", placements);
-  expect(same(route[0]!, kerbOf("frontend"))).toBe(true);
-  expect(same(route.at(-1)!, kerbOf("deploy"))).toBe(true);
-  for (let i = 1; i < route.length; i++) {
-    const [p, q] = [route[i - 1]!, route[i]!];
-    const steps = Math.round((Math.abs(q[0] - p[0]) + Math.abs(q[1] - p[1])) / (PITCH / 2));
-    for (let s = 0; s < steps; s++) {
-      const from: Point = [p[0] + ((q[0] - p[0]) * s) / steps, p[1] + ((q[1] - p[1]) * s) / steps];
-      const to: Point = [
-        p[0] + ((q[0] - p[0]) * (s + 1)) / steps,
-        p[1] + ((q[1] - p[1]) * (s + 1)) / steps,
-      ];
-      expect(built.has(segmentKey({ a: from, b: to }))).toBe(true);
-    }
-  }
-  // No route to a block that isn't there yet.
+  expect(route.length).toBeGreaterThanOrEqual(2);
+  expect(onBuilt(route, keys(builtStreets(placements)))).toBe(true);
+  // No route to a block that isn't there.
   expect(streetRoute("frontend", "api", placements)).toEqual([]);
+  expect(streetRoute("frontend", "api", { ...placements, api: notNeeded("api", 3) })).toEqual([]);
 });
 
-test("cars come once two blocks are connected: one per two blocks, six at most", () => {
+test("cars come once two blocks stand: one per two blocks, six at most", () => {
   expect(carCount({})).toBe(0);
   expect(carCount(placed("name"))).toBe(0);
   expect(carCount(placed("name", "frontend"))).toBe(0);
   expect(carCount(placed("name", "frontend", "data"))).toBe(1);
   expect(carCount(placed("frontend", "data", "api"))).toBe(1);
   expect(carCount(placed("frontend", "data", "api", "auth"))).toBe(2);
+  expect(carCount({ ...placed("frontend", "data"), api: notNeeded("api", 2) })).toBe(1);
   expect(carCount(ALL)).toBe(6);
-  // A "not needed" lot still grows the town.
-  expect(
-    carCount({
-      ...placed("frontend"),
-      api: { slot: "api", optionIds: [], labels: [], auto: true },
-    }),
-  ).toBe(1);
 });
 
 test("new streets are paved outward from the existing network, one after another", () => {
   const before = builtStreets(placed("name", "frontend"));
-  const after = builtStreets(placed("name", "frontend", "deploy"));
+  const after = builtStreets(placed("name", "frontend", "deploy", "data", "api"));
   const order = pavingOrder(before, after);
   expect(order.map((o) => segmentKey(o.segment)).sort()).toEqual(
     [...keys(after)].filter((k) => !keys(before).has(k)).sort(),
   );
-  const network = new Set(before.flatMap(({ a, b }) => [a, b].map((p) => p.join(","))));
-  const laid = new Set(network);
+  const laid = new Set(before.flatMap(({ a, b }) => [a, b].map((p) => p.join(","))));
   const steps = [...order].sort((x, y) => x.step - y.step);
   expect(steps[0]!.step).toBe(0);
   for (const { segment, from, step } of steps) {
@@ -261,7 +290,7 @@ test("new streets are paved outward from the existing network, one after another
 
 test("crosswalks go where three or more streets meet, one per street", () => {
   expect(crossings(builtStreets(placed("name")))).toEqual([]);
-  // One block: a ring of streets with the avenue leaving it; corners are turns, no crossing.
+  // One central block: a ring of streets with the avenue leaving it; corners are turns.
   const one = crossings(builtStreets(placed("frontend")));
   expect(one).toHaveLength(1);
   expect(same(one[0]!.at, [PITCH / 2, PITCH / 2])).toBe(true);
@@ -274,16 +303,26 @@ test("crosswalks go where three or more streets meet, one per street", () => {
 });
 
 test("trails sharing a street get different lanes", () => {
-  const route = (...points: Point[]) => points;
   const h = PITCH / 2;
   const lanes = trailLanes([
-    route([0, h], [2 * h, h]),
-    route([2 * h, h], [0, h]),
-    route([0, h], [0, 3 * h]),
-    route([-2 * h, h], [4 * h, h]),
+    [
+      [0, h],
+      [2 * h, h],
+    ],
+    [
+      [2 * h, h],
+      [0, h],
+    ],
+    [
+      [0, h],
+      [0, 3 * h],
+    ],
+    [
+      [-2 * h, h],
+      [4 * h, h],
+    ],
   ]);
   expect(lanes).toHaveLength(4);
-  // The first two share a street: different lanes; the third shares nothing with them.
   expect(lanes[0]).not.toBe(lanes[1]);
   expect(lanes[3]).not.toBe(lanes[0]);
   expect(lanes[3]).not.toBe(lanes[1]);

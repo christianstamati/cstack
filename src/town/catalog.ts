@@ -22,21 +22,48 @@ export interface SlotDef {
   readonly id: SlotId;
   readonly label: string;
   readonly kind: "building" | "sign" | "paint" | "props";
-  /** The city block the slot builds on, as [column, row] from the central block (+x and +z
-   * run towards the default camera), or null for the entrance sign and the repaint. */
-  readonly block: readonly [column: number, row: number] | null;
   readonly options: ReadonlyArray<{ readonly id: string; readonly label: string }>;
 }
 
-/** In fill order: the town grows from the centre outwards, so the thinking crane waits on
- * the central block first, then the ring around it, then the outer ring. */
 export const SLOTS: ReadonlyArray<SlotDef> = [
-  { id: "name", label: "Project name", kind: "sign", block: null, options: [] },
+  { id: "name", label: "Project name", kind: "sign", options: [] },
+  {
+    id: "structure",
+    label: "Structure",
+    kind: "building",
+
+    options: [
+      { id: "single", label: "Single app" },
+      { id: "monorepo", label: "Monorepo" },
+    ],
+  },
+  {
+    id: "toolchain",
+    label: "Toolchain",
+    kind: "building",
+
+    options: [
+      { id: "vite-plus", label: "Vite+" },
+      { id: "biome-lefthook", label: "Biome + Lefthook" },
+    ],
+  },
+  {
+    id: "packageManager",
+    label: "Package manager",
+    kind: "building",
+
+    options: [
+      { id: "pnpm", label: "pnpm" },
+      { id: "bun", label: "Bun" },
+      { id: "npm", label: "npm" },
+      { id: "yarn", label: "Yarn" },
+    ],
+  },
   {
     id: "frontend",
     label: "Frontend",
     kind: "building",
-    block: [0, 0],
+
     options: [
       { id: "nextjs", label: "Next.js" },
       { id: "tanstack-start", label: "TanStack Start" },
@@ -46,7 +73,7 @@ export const SLOTS: ReadonlyArray<SlotDef> = [
     id: "data",
     label: "Backend / data",
     kind: "building",
-    block: [-1, 0],
+
     options: [
       { id: "none", label: "None" },
       { id: "convex", label: "Convex" },
@@ -58,7 +85,7 @@ export const SLOTS: ReadonlyArray<SlotDef> = [
     id: "api",
     label: "API layer",
     kind: "building",
-    block: [0, -1],
+
     options: [
       { id: "builtin", label: "Built-in" },
       { id: "orpc", label: "oRPC" },
@@ -72,7 +99,7 @@ export const SLOTS: ReadonlyArray<SlotDef> = [
     id: "database",
     label: "Database",
     kind: "building",
-    block: [-1, -1],
+
     options: [
       { id: "postgres", label: "Postgres" },
       { id: "mysql", label: "MySQL" },
@@ -81,10 +108,21 @@ export const SLOTS: ReadonlyArray<SlotDef> = [
     ],
   },
   {
+    id: "deploy",
+    label: "Deployment",
+    kind: "building",
+
+    options: [
+      { id: "vercel", label: "Vercel" },
+      { id: "sst", label: "SST" },
+      { id: "none", label: "None" },
+    ],
+  },
+  {
     id: "dbHost",
     label: "Database hosting",
     kind: "building",
-    block: [1, -1],
+
     options: [
       { id: "neon", label: "Neon" },
       { id: "supabase", label: "Supabase" },
@@ -99,7 +137,7 @@ export const SLOTS: ReadonlyArray<SlotDef> = [
     id: "auth",
     label: "Authentication",
     kind: "building",
-    block: [1, 0],
+
     options: [
       { id: "none", label: "None" },
       { id: "better-auth", label: "Better Auth" },
@@ -113,7 +151,7 @@ export const SLOTS: ReadonlyArray<SlotDef> = [
     id: "authMethods",
     label: "Sign-in methods",
     kind: "props",
-    block: [1, 1],
+
     options: [
       { id: "google", label: "Google" },
       { id: "github", label: "GitHub" },
@@ -121,55 +159,12 @@ export const SLOTS: ReadonlyArray<SlotDef> = [
       { id: "magic-link", label: "Magic link" },
     ],
   },
-  {
-    id: "structure",
-    label: "Structure",
-    kind: "building",
-    block: [0, 2],
-    options: [
-      { id: "single", label: "Single app" },
-      { id: "monorepo", label: "Monorepo" },
-    ],
-  },
-  {
-    id: "toolchain",
-    label: "Toolchain",
-    kind: "building",
-    block: [1, 2],
-    options: [
-      { id: "vite-plus", label: "Vite+" },
-      { id: "biome-lefthook", label: "Biome + Lefthook" },
-    ],
-  },
-  {
-    id: "packageManager",
-    label: "Package manager",
-    kind: "building",
-    block: [-1, 2],
-    options: [
-      { id: "pnpm", label: "pnpm" },
-      { id: "bun", label: "Bun" },
-      { id: "npm", label: "npm" },
-      { id: "yarn", label: "Yarn" },
-    ],
-  },
-  {
-    id: "deploy",
-    label: "Deployment",
-    kind: "building",
-    block: [2, 0],
-    options: [
-      { id: "vercel", label: "Vercel" },
-      { id: "sst", label: "SST" },
-      { id: "none", label: "None" },
-    ],
-  },
-  { id: "ui", label: "UI styling", kind: "paint", block: null, options: [] },
+  { id: "ui", label: "UI styling", kind: "paint", options: [] },
   {
     id: "extras",
     label: "Extras",
     kind: "props",
-    block: [2, 1],
+
     options: [
       { id: "example", label: "Example feature" },
       { id: "ci", label: "CI" },

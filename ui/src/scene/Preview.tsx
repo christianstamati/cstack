@@ -8,7 +8,7 @@ import type { Group } from "three";
 import { slotById, type SlotId } from "../../../src/town/catalog.ts";
 import type { TownState } from "../../../src/town/protocol.ts";
 import { buildingFor, propFor } from "../buildings/registry.ts";
-import { lotPosition, propSpot, themeFor } from "../logic.ts";
+import { propSpot, spotFor, themeFor } from "../logic.ts";
 import { OnSpot, propLogoSize, Signed } from "./Placements.tsx";
 
 export interface PreviewTarget {
@@ -64,10 +64,15 @@ export function Preview({ state }: { state: TownState }) {
   if (slot.kind === "building") {
     const option = target.options.at(-1)!;
     const Model = buildingFor(slot.id, option.id);
-    const [x, , z] = lotPosition(slot.id);
     return (
       // Keyed by option: a new option is a new model, measured afresh for its logo sign.
-      <OnSpot key={option.id} slot={slot.id} at={[x, z]}>
+      // An unplaced building floats over the block it would take.
+      <OnSpot
+        key={option.id}
+        slot={slot.id}
+        at={spotFor(slot.id, state.placements)}
+        placements={state.placements}
+      >
         <Float y={taken ? FLOAT_TAKEN : FLOAT_EMPTY}>
           <Signed stage="preview" theme={theme} auto={false} logo={`${slot.id}:${option.id}`}>
             <Model label={option.label} stage="preview" theme={theme} />
@@ -82,7 +87,12 @@ export function Preview({ state }: { state: TownState }) {
         {target.options.map((option, index) => {
           const Model = propFor(slot.id, option.id);
           return (
-            <OnSpot key={option.id} slot={slot.id} at={propSpot(slot.id, option.id, index)}>
+            <OnSpot
+              key={option.id}
+              slot={slot.id}
+              at={propSpot(slot.id, option.id, index, state.placements)}
+              placements={state.placements}
+            >
               <Float y={FLOAT_EMPTY}>
                 <Signed
                   stage="preview"
