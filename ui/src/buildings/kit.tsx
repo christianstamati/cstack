@@ -2,9 +2,10 @@
 // windows. Geometry and materials are declared as JSX, so R3F disposes them when a
 // building unmounts (re-answering a question swaps the building).
 //
-// A building wraps its parts in <Frame stage theme>. The parts read the stage from it, so
-// one place decides how a stage looks: `preview` is translucent; the build stages
-// (blueprint, constructing, solid, failed) add their look in `Mat` and `Frame`.
+// A building wraps its parts in <Frame stage theme>. Every material (parts, logos, painted
+// text, smoke, blinking lights) takes its stage styling from `stageLook`, the one place a
+// stage's look is decided: `preview` is translucent. The build stages (blueprint,
+// constructing, solid, failed) are added there.
 import { extend, useFrame, type ThreeElement } from "@react-three/fiber";
 import { createContext, useContext, useMemo, useRef, type ReactNode } from "react";
 import { Shape, SRGBColorSpace, type Group, type MeshStandardMaterial } from "three";
@@ -48,6 +49,21 @@ export function useKit(): KitValue {
   return useContext(Kit);
 }
 
+export interface StageLook {
+  opacity: number;
+  transparent: boolean;
+  depthWrite: boolean;
+  /** Extra self-light added to every surface. */
+  glow: number;
+}
+
+/** How `stage` changes a material whose own opacity is `opacity`. */
+export function stageLook(stage: Stage, opacity = 1): StageLook {
+  const stageOpacity = stage === "preview" ? 0.45 : 1;
+  const alpha = opacity * stageOpacity;
+  return { opacity: alpha, transparent: alpha < 1, depthWrite: alpha >= 1, glow: 0 };
+}
+
 /** The root of every building: hands the stage and theme to its parts. */
 export function Frame(props: { stage: Stage; theme: Theme; children: ReactNode }) {
   const { stage, theme } = props;
@@ -71,8 +87,7 @@ interface MatProps {
 
 /** The flat-shaded material of every part, adjusted for the stage. */
 export function Mat({ color, glow = false, opacity = 1 }: MatProps) {
-  const { stage } = useKit();
-  const alpha = opacity * (stage === "preview" ? 0.45 : 1);
+  const look = stageLook(useKit().stage, opacity);
   // Every part glows a little in its own colour, so the toy colours still read under the
   // blue moonlight; windows and neon glow fully.
   const strength = glow === true ? 1 : glow === false ? SELF_LIGHT : Math.max(glow, SELF_LIGHT);
@@ -83,10 +98,10 @@ export function Mat({ color, glow = false, opacity = 1 }: MatProps) {
       roughness={0.85}
       metalness={0}
       emissive={color}
-      emissiveIntensity={strength}
-      transparent={alpha < 1}
-      opacity={alpha}
-      depthWrite={alpha >= 1}
+      emissiveIntensity={strength + look.glow}
+      transparent={look.transparent}
+      opacity={look.opacity}
+      depthWrite={look.depthWrite}
     />
   );
 }
@@ -299,12 +314,12 @@ function drawLabel(text: string, aspect: number, ink: string): HTMLCanvasElement
  * letters keep their colour at night. */
 export function PaintedText(props: Placed & { text: string; w: number; h: number; ink: string }) {
   const { w, h, text, ink } = props;
-  const { stage } = useKit();
+  const look = stageLook(useKit().stage);
   const canvas = useMemo(() => drawLabel(text, w / h, ink), [text, w, h, ink]);
   return (
     <mesh position={props.position} rotation={props.rotation} scale={props.scale}>
       <planeGeometry args={[w, h]} />
-      <meshBasicMaterial transparent opacity={stage === "preview" ? 0.45 : 1} depthWrite={false}>
+      <meshBasicMaterial transparent opacity={look.opacity} depthWrite={false}>
         <canvasTexture attach="map" args={[canvas]} colorSpace={SRGBColorSpace} />
       </meshBasicMaterial>
     </mesh>
@@ -380,7 +395,7 @@ export function Wobble(
 export function Smoke(props: Placed) {
   const puffs = useRef<Array<Group | null>>([]);
   const materials = useRef<Array<MeshStandardMaterial | null>>([]);
-  const { stage } = useKit();
+  const look = stageLook(useKit().stage);
   useFrame(({ clock }) => {
     for (let i = 0; i < 3; i++) {
       const t = (clock.elapsedTime * 0.35 + i / 3) % 1;
@@ -389,7 +404,7 @@ export function Smoke(props: Placed) {
       if (!puff || !material) continue;
       puff.position.set(Math.sin(t * 4 + i) * 0.08, t * 1.1, 0);
       puff.scale.setScalar(0.4 + t * 0.9);
-      material.opacity = (stage === "preview" ? 0.25 : 0.55) * (1 - t);
+      material.opacity = 0.55 * look.opacity * (1 - t);
     }
   });
   return (
@@ -417,12 +432,12 @@ export function Blinker(
   props: Placed & { color: string; size?: number; period?: number; phase?: number },
 ) {
   const material = useRef<MeshStandardMaterial>(null);
-  const { stage } = useKit();
+  const look = stageLook(useKit().stage);
   const { period = 1.6, phase = 0 } = props;
   useFrame(({ clock }) => {
     if (material.current)
       material.current.emissiveIntensity =
-        ((clock.elapsedTime + phase) % period) / period < 0.5 ? 1.6 : 0.15;
+        (((clock.elapsedTime + phase) % period) / period < 0.5 ? 1.6 : 0.15) + look.glow;
   });
   const size = props.size ?? 0.06;
   return (
@@ -433,8 +448,9 @@ export function Blinker(
         color={props.color}
         emissive={props.color}
         flatShading
-        transparent={stage === "preview"}
-        opacity={stage === "preview" ? 0.45 : 1}
+        transparent={look.transparent}
+        opacity={look.opacity}
+        depthWrite={look.depthWrite}
       />
     </mesh>
   );

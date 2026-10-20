@@ -5,14 +5,17 @@ import type { ThreeEvent } from "@react-three/fiber";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Box3, Vector3, type Group, type Object3D } from "three";
 
-import { SLOTS, type SlotDef } from "../../../src/town/catalog.ts";
+import { SLOTS, type SlotDef, type SlotId } from "../../../src/town/catalog.ts";
 import type { Placement, TownState } from "../../../src/town/protocol.ts";
+import { LogoSign, logoSignHeight } from "../buildings/Badge.tsx";
 import { Drop } from "../buildings/Drop.tsx";
 import { NotNeeded } from "../buildings/Generic.tsx";
 import { Ball, Box, Cyl } from "../buildings/kit.tsx";
+import { logoFor } from "../buildings/logos.ts";
 import { buildingFor, propFor } from "../buildings/registry.ts";
 import {
   hoverText,
+  modelKindFor,
   projectNameFrom,
   propSpot,
   themeFor,
@@ -64,11 +67,16 @@ interface PlacedProps {
   at: readonly [x: number, z: number];
   placement: Placement;
   auto: boolean;
+  /** The logo for the sign on its roof, if it has one. */
+  logo?: `${SlotId}:${string}`;
+  /** Width of that logo, in model units. */
+  logoSize?: number;
   children: ReactNode;
 }
 
-/** Drops a model onto its spot, measures it for the flag and the hover label. */
-function Placed({ id, at, placement, auto, children }: PlacedProps) {
+/** Drops a model onto its spot and measures it, to stand its logo sign (or the "auto"
+ * flag) on its roof and to anchor the hover label above it. */
+function Placed({ id, at, placement, auto, logo, logoSize = 0.95, children }: PlacedProps) {
   const [x, z] = at;
   const content = useRef<Group>(null);
   const [height, setHeight] = useState<number | null>(null);
@@ -76,10 +84,13 @@ function Placed({ id, at, placement, auto, children }: PlacedProps) {
     if (content.current) setHeight(solidHeight(content.current));
   }, []);
   useEffect(() => () => clearHover(id), [id]);
+  const [slot, optionId] = logo?.split(":") ?? [];
+  const hasSign = slot !== undefined && logoFor(slot as SlotId, optionId ?? "") !== null;
   const text = hoverText(placement);
   const over = (event: ThreeEvent<PointerEvent>) => {
     event.stopPropagation();
-    setHover({ id, ...text, anchor: [x, ((height ?? 2) + (auto ? 0.85 : 0.3)) * MODEL_SCALE, z] });
+    const top = (height ?? 2) + (hasSign ? logoSignHeight(logoSize) : auto ? 0.65 : 0) + 0.3;
+    setHover({ id, ...text, anchor: [x, top * MODEL_SCALE, z] });
   };
   const out = (event: ThreeEvent<PointerEvent>) => {
     event.stopPropagation();
@@ -90,8 +101,11 @@ function Placed({ id, at, placement, auto, children }: PlacedProps) {
       <Drop>
         <group ref={content} onPointerOver={over} onPointerOut={out}>
           {children}
+          {logo && hasSign && height !== null ? (
+            <LogoSign of={logo} position={[0, height - 0.05, 0]} size={logoSize} auto={auto} />
+          ) : null}
         </group>
-        {auto && height !== null ? <AutoFlag y={height} /> : null}
+        {auto && !hasSign && height !== null ? <AutoFlag y={height} /> : null}
       </Drop>
     </group>
   );
@@ -105,21 +119,22 @@ function SlotPlacement(props: {
 }) {
   const { slot, placement, theme } = props;
   const lot = slot.lot;
-  if (slot.kind !== "sign" && placement.optionIds.length === 0) {
-    return (
-      <Placed
-        key="not-needed"
-        id={`${slot.id}:not-needed`}
-        at={lot}
-        placement={placement}
-        auto={false}
-      >
-        <NotNeeded stage={STAGE} theme={theme} />
-      </Placed>
-    );
-  }
-  switch (slot.kind) {
-    case "building": {
+  const kind = modelKindFor(slot, placement);
+  switch (kind) {
+    case "notNeeded":
+      return (
+        <Placed
+          key="not-needed"
+          id={`${slot.id}:not-needed`}
+          at={lot}
+          placement={placement}
+          auto={false}
+        >
+          <NotNeeded stage={STAGE} theme={theme} />
+        </Placed>
+      );
+    case "building":
+    case "generic": {
       const optionId = placement.optionIds[0]!;
       const Model = buildingFor(slot.id, optionId);
       return (
@@ -129,6 +144,7 @@ function SlotPlacement(props: {
           at={lot}
           placement={placement}
           auto={placement.auto}
+          logo={`${slot.id}:${optionId}`}
         >
           <Model label={placement.labels[0] ?? optionId} stage={STAGE} theme={theme} />
         </Placed>
@@ -167,8 +183,9 @@ function SlotPlacement(props: {
                 id={`${slot.id}:${optionId}`}
                 at={propSpot(slot.id, optionId, index)}
                 placement={{ ...placement, optionIds: [optionId], labels: [label] }}
-                // Small props get no flag (a row of flags is noise); the hover says it.
-                auto={false}
+                auto={placement.auto}
+                logo={`${slot.id}:${optionId}`}
+                logoSize={slot.id === "authMethods" ? 0.5 : 0.7}
               >
                 <Model label={label} stage={STAGE} theme={theme} />
               </Placed>

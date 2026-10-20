@@ -26,10 +26,11 @@ function Tower({ stage, theme }: BuildingProps) {
       <Box position={[0, 2.02, 0]} size={[1.3, 3.8, 1.3]} color={BLACK} />
       <Box position={[0, 3.98, 0]} size={[1.4, 0.14, 1.4]} color={theme.accent} />
       <Box position={[0.2, 4.2, -0.2]} size={[0.5, 0.3, 0.4]} color="#2b2d33" />
-      {floors.map((y, i) =>
-        [-0.35, 0, 0.35].map((x) => (
+      {floors.map((y, row) =>
+        [-0.35, 0, 0.35].map((x, column) => (
           <group key={`${y},${x}`}>
-            {(i + x * 10) % 3 !== 1 ? <Win position={[x, y, 0.66]} w={0.22} h={0.26} /> : null}
+            {/* A few dark windows on the front, in a fixed pattern. */}
+            {(row + column) % 3 !== 1 ? <Win position={[x, y, 0.66]} w={0.22} h={0.26} /> : null}
             <Win position={[0.66, y, x]} rotation={[0, Math.PI / 2, 0]} w={0.22} h={0.26} />
             <Win position={[-0.66, y, x]} rotation={[0, Math.PI / 2, 0]} w={0.22} h={0.26} />
           </group>

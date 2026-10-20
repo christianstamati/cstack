@@ -1,74 +1,124 @@
-// Glowing cables arching between buildings that depend on each other (see
-// src/town/links.ts), with a spark of light running along each one.
+// Glowing cables between buildings that depend on each other (see src/town/links.ts).
+// Each rises straight up beside its building, arches over the town and comes down beside
+// the other, so it never cuts through a building; sparks of light run along it.
 import { useFrame } from "@react-three/fiber";
 import { useMemo, useRef } from "react";
-import { QuadraticBezierCurve3, Vector3, type Mesh, type MeshBasicMaterial } from "three";
+import {
+  AdditiveBlending,
+  CubicBezierCurve3,
+  Vector3,
+  type Group,
+  type MeshBasicMaterial,
+} from "three";
 
 import { slotById, type SlotId } from "../../../src/town/catalog.ts";
 import { activeLinks } from "../../../src/town/links.ts";
 import type { TownState } from "../../../src/town/protocol.ts";
 
-const CABLE = "#8fd3ff";
-const SPARK = "#e6f6ff";
+const CABLE = "#6fe3ff";
+const SPARK = "#f2fbff";
 /** Seconds for a cable to fade in, after both buildings have landed. */
-const FADE_IN = 1.2;
-const DELAY = 0.6;
+const FADE_IN = 1.0;
+const DELAY = 0.7;
+const SPARKS = 3;
+/** How far from a lot's centre a cable meets the ground: just outside the building. */
+const FOOT = 2.0;
 
-/** An arc from lot `a` to lot `b`: it rises from the ground next to each building and
- * peaks higher the further apart they are. */
-function arc(a: SlotId, b: SlotId): QuadraticBezierCurve3 {
+/** Rises beside lot `a`, arches higher the further apart the lots are, comes down beside `b`. */
+function cableCurve(a: SlotId, b: SlotId): CubicBezierCurve3 {
   const [ax, az] = slotById(a).lot;
   const [bx, bz] = slotById(b).lot;
   const length = Math.hypot(bx - ax, bz - az);
   const dx = (bx - ax) / length;
   const dz = (bz - az) / length;
-  const inset = Math.min(1.3, length / 3);
-  return new QuadraticBezierCurve3(
-    new Vector3(ax + dx * inset, 0.1, az + dz * inset),
-    new Vector3((ax + bx) / 2, 2.2 + length * 0.22, (az + bz) / 2),
-    new Vector3(bx - dx * inset, 0.1, bz - dz * inset),
+  const foot = Math.min(FOOT, length / 3);
+  const lift = 3.9 + length * 0.16;
+  const start = new Vector3(ax + dx * foot, 0.1, az + dz * foot);
+  const end = new Vector3(bx - dx * foot, 0.1, bz - dz * foot);
+  return new CubicBezierCurve3(
+    start,
+    new Vector3(start.x, lift, start.z),
+    new Vector3(end.x, lift, end.z),
+    end,
   );
 }
 
-function Link({ a, b, index }: { a: SlotId; b: SlotId; index: number }) {
-  const curve = useMemo(() => arc(a, b), [a, b]);
-  const tube = useMemo(() => [curve, 32, 0.035, 5, false] as const, [curve]);
-  const spark = useRef<Mesh>(null);
-  const cable = useRef<MeshBasicMaterial>(null);
+function Cable({ a, b, index }: { a: SlotId; b: SlotId; index: number }) {
+  const curve = useMemo(() => cableCurve(a, b), [a, b]);
+  const core = useMemo(() => [curve, 48, 0.07, 6, false] as const, [curve]);
+  const halo = useMemo(() => [curve, 48, 0.17, 6, false] as const, [curve]);
+  const coreMaterial = useRef<MeshBasicMaterial>(null);
+  const haloMaterial = useRef<MeshBasicMaterial>(null);
+  const sparks = useRef<Array<Group | null>>([]);
   const born = useRef<number | null>(null);
   const point = useMemo(() => new Vector3(), []);
   useFrame(({ clock }) => {
     born.current ??= clock.elapsedTime;
     const age = clock.elapsedTime - born.current - DELAY;
     const fade = Math.min(Math.max(age / FADE_IN, 0), 1);
-    if (cable.current) cable.current.opacity = 0.35 * fade;
-    if (spark.current) {
-      const t = (clock.elapsedTime * 0.3 + index * 0.37) % 1;
+    const pulse = 0.85 + 0.15 * Math.sin(clock.elapsedTime * 2 + index);
+    if (coreMaterial.current) coreMaterial.current.opacity = 0.9 * fade * pulse;
+    if (haloMaterial.current) haloMaterial.current.opacity = 0.22 * fade * pulse;
+    sparks.current.forEach((spark, i) => {
+      if (!spark) return;
+      const t = (clock.elapsedTime * 0.22 + i / SPARKS + index * 0.13) % 1;
       curve.getPoint(t, point);
-      spark.current.position.copy(point);
-      spark.current.visible = fade > 0.5;
-    }
+      spark.position.copy(point);
+      spark.visible = fade > 0.5;
+    });
   });
   return (
     <group>
       <mesh>
-        <tubeGeometry args={tube} />
-        <meshBasicMaterial ref={cable} color={CABLE} transparent opacity={0} depthWrite={false} />
+        <tubeGeometry args={core} />
+        <meshBasicMaterial
+          ref={coreMaterial}
+          color={CABLE}
+          transparent
+          opacity={0}
+          toneMapped={false}
+        />
       </mesh>
-      <mesh ref={spark} visible={false}>
-        <icosahedronGeometry args={[0.09, 0]} />
-        <meshBasicMaterial color={SPARK} />
+      <mesh>
+        <tubeGeometry args={halo} />
+        <meshBasicMaterial
+          ref={haloMaterial}
+          color={CABLE}
+          transparent
+          opacity={0}
+          depthWrite={false}
+          blending={AdditiveBlending}
+          toneMapped={false}
+        />
       </mesh>
+      {Array.from({ length: SPARKS }, (_, i) => (
+        <group key={i} ref={(g) => void (sparks.current[i] = g)} visible={false}>
+          <mesh>
+            <icosahedronGeometry args={[0.16, 0]} />
+            <meshBasicMaterial color={SPARK} toneMapped={false} />
+          </mesh>
+          <mesh>
+            <icosahedronGeometry args={[0.38, 1]} />
+            <meshBasicMaterial
+              color={CABLE}
+              transparent
+              opacity={0.35}
+              depthWrite={false}
+              blending={AdditiveBlending}
+              toneMapped={false}
+            />
+          </mesh>
+        </group>
+      ))}
     </group>
   );
 }
 
 export function Links({ state }: { state: TownState }) {
-  const links = activeLinks(state.placements);
   return (
     <>
-      {links.map(([a, b], index) => (
-        <Link key={`${a}-${b}`} a={a} b={b} index={index} />
+      {activeLinks(state.placements).map(([a, b], index) => (
+        <Cable key={`${a}-${b}`} a={a} b={b} index={index} />
       ))}
     </>
   );

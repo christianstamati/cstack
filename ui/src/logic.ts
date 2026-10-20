@@ -1,5 +1,5 @@
 // Pure helpers for the page, kept free of React and three.js so they can be tested.
-import { SLOTS, slotById, type SlotId } from "../../src/town/catalog.ts";
+import { SLOTS, slotById, type SlotDef, type SlotId } from "../../src/town/catalog.ts";
 import type { Placement } from "../../src/town/protocol.ts";
 
 /** Radius of the island's flat top, in world units. Every lot fits inside it. */
@@ -81,28 +81,50 @@ export interface DecorSpot {
   rotation: number;
 }
 
-/** Places trees and rocks on the island, away from every lot, prop and each other. */
-export function decorSpots(count = 22, seed = 7): DecorSpot[] {
+/** Trees ring the shore, so they never stand between the lots or in front of a building;
+ * a few low rocks dot the grass in between. Everything keeps clear of every lot, every
+ * prop and each other. */
+export function decorSpots(seed = 7): DecorSpot[] {
   const random = seededRandom(seed);
   const lots = SLOTS.map((slot) => slot.lot);
+  const props = Object.values(EXTRA_SPOTS);
   const spots: DecorSpot[] = [];
-  for (let tries = 0; tries < 2000 && spots.length < count; tries++) {
+  const tryPlace = (kind: DecorSpot["kind"], radius: number, lotGap: number) => {
     const angle = random() * Math.PI * 2;
-    const radius = 3 + Math.sqrt(random()) * (ISLAND_RADIUS - 5.3);
     const x = Math.cos(angle) * radius;
     const z = Math.sin(angle) * radius;
-    if (lots.some(([lx, lz]) => Math.hypot(x - lx, z - lz) <= LOT_SIZE + 0.5)) continue;
-    if (Object.values(EXTRA_SPOTS).some(([px, pz]) => Math.hypot(x - px, z - pz) <= 2.3)) continue;
-    if (spots.some((s) => Math.hypot(x - s.x, z - s.z) < 1.8)) continue;
+    if (lots.some(([lx, lz]) => Math.hypot(x - lx, z - lz) <= lotGap)) return;
+    if (props.some(([px, pz]) => Math.hypot(x - px, z - pz) <= 2.3)) return;
+    if (spots.some((s) => Math.hypot(x - s.x, z - s.z) < (kind === "tree" ? 1.5 : 1.8))) return;
     spots.push({
-      kind: random() < 0.7 ? "tree" : "rock",
+      kind,
       x,
       z,
-      scale: 0.7 + random() * 0.6,
+      scale: kind === "tree" ? 0.75 + random() * 0.4 : 0.6 + random() * 0.5,
       rotation: random() * Math.PI * 2,
     });
+  };
+  for (let tries = 0; tries < 3000 && spots.length < 30; tries++)
+    tryPlace("tree", 11.8 + random() * 1.4, 3.3);
+  for (let tries = 0, rocks = 0; tries < 500 && rocks < 8; tries++) {
+    const before = spots.length;
+    tryPlace("rock", 3 + random() * 6.5, LOT_SIZE + 0.4);
+    if (spots.length > before) rocks++;
   }
   return spots;
+}
+
+/** Which model a placement shows. Empty option ids mean the slot doesn't apply ("not
+ * needed"), never the generic building; an option the catalog doesn't list gets the
+ * generic building. The name is free text, so it is always the sign. */
+export type ModelKind = "building" | "generic" | "notNeeded" | "sign" | "paint" | "props";
+
+export function modelKindFor(slot: SlotDef, placement: Placement): ModelKind {
+  if (slot.kind === "sign") return "sign";
+  const [first] = placement.optionIds;
+  if (first === undefined) return "notNeeded";
+  if (slot.kind !== "building") return slot.kind;
+  return slot.options.some((option) => option.id === first) ? "building" : "generic";
 }
 
 /** How a building is shown. Only `preview` and `placed` are drawn so far; the build

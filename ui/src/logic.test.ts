@@ -12,6 +12,7 @@ import {
   LOT_SIZE,
   ISLAND_RADIUS,
   lotPosition,
+  modelKindFor,
   projectNameFrom,
   propSpot,
   readMuted,
@@ -98,13 +99,42 @@ test("trees and rocks keep clear of every lot and stay on the island", () => {
   const spots = decorSpots();
   expect(spots.length).toBeGreaterThan(5);
   for (const spot of spots) {
-    expect(Math.hypot(spot.x, spot.z)).toBeLessThan(ISLAND_RADIUS - 2);
+    expect(Math.hypot(spot.x, spot.z)).toBeLessThan(ISLAND_RADIUS - 0.7);
     for (const slot of SLOTS) {
       const [x, , z] = lotPosition(slot.id);
       expect(Math.hypot(spot.x - x, spot.z - z)).toBeGreaterThan(LOT_SIZE);
     }
   }
   expect(decorSpots()).toEqual(spots);
+});
+
+test("trees grow around the edge, not between the lots; the edge stays lush", () => {
+  const trees = decorSpots().filter((spot) => spot.kind === "tree");
+  expect(trees.length).toBeGreaterThanOrEqual(14);
+  for (const tree of trees) {
+    expect(Math.hypot(tree.x, tree.z)).toBeGreaterThan(11.5);
+    for (const slot of SLOTS) {
+      const [x, , z] = lotPosition(slot.id);
+      expect(Math.hypot(tree.x - x, tree.z - z)).toBeGreaterThan(3.1);
+    }
+  }
+});
+
+test("each placement maps to the right kind of model", () => {
+  const slot = (id: SlotId) => SLOTS.find((s) => s.id === id)!;
+  expect(modelKindFor(slot("deploy"), placement("deploy", ["vercel"], ["Vercel"]))).toBe(
+    "building",
+  );
+  expect(modelKindFor(slot("deploy"), placement("deploy", ["fly"], ["Fly.io"]))).toBe("generic");
+  expect(modelKindFor(slot("api"), placement("api", [], ["Not needed"], true))).toBe("notNeeded");
+  expect(modelKindFor(slot("extras"), placement("extras", [], ["Not needed"], true))).toBe(
+    "notNeeded",
+  );
+  expect(modelKindFor(slot("extras"), placement("extras", ["ci"], ["CI"]))).toBe("props");
+  expect(modelKindFor(slot("ui"), placement("ui", ["theme:blue"], ["Blue"], true))).toBe("paint");
+  expect(modelKindFor(slot("ui"), placement("ui", [], ["Not needed"], true))).toBe("notNeeded");
+  // The name is free text: no option ids, but never "not needed".
+  expect(modelKindFor(slot("name"), placement("name", [], ["shop"]))).toBe("sign");
 });
 
 test("theme defaults and follows the styling answer", () => {
