@@ -1,4 +1,5 @@
 import { BOOTSTRAP_PROMPT } from "./bootstrap-prompt.ts";
+import { TOWN_PROMPT } from "./town-prompt.ts";
 
 export interface PromptFacts {
   readonly projectDir: string;
@@ -18,7 +19,7 @@ export const CONFIG_PATH = ".cstack/config.json";
 // installed the file is what the user pastes by hand.
 export const LAUNCH_PROMPT = `Read the file "${BOOTSTRAP_PATH}" and follow it exactly: it is your cstack bootstrap prompt.`;
 
-export function fillBootstrapPrompt(facts: PromptFacts): string {
+export function fillBootstrapPrompt(facts: PromptFacts, options?: { town: boolean }): string {
   const values: Record<string, string> = {
     PROJECT_DIR: facts.projectDir,
     PROJECT_NAME: facts.projectName,
@@ -34,7 +35,7 @@ export function fillBootstrapPrompt(facts: PromptFacts): string {
     }
     return value;
   });
-  return filled;
+  return options?.town ? `${filled}\n${TOWN_PROMPT}` : filled;
 }
 
 // Matches the "cstack defaults" section of the prompt; `--defaults` writes it.
