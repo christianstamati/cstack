@@ -5,7 +5,9 @@ import { afterEach, expect, test, vi } from "vite-plus/test";
 
 import { agentCommandLine, runAgent } from "../src/agent.ts";
 import { defaultOptions } from "./helpers.ts";
-import { runTown } from "../src/town/run.ts";
+import { CliError } from "../src/create.ts";
+import { openTown, runTown } from "../src/town/run.ts";
+import { TownStore } from "../src/town/store.ts";
 
 let dir: string | undefined;
 afterEach(() => {
@@ -98,4 +100,22 @@ test("runTown puts the prompt after `--` on the agent's command line", async () 
   } finally {
     process.env.PATH = oldPath;
   }
+});
+
+test("a town that can't start is a plain error that points to --terminal", async () => {
+  const store = new TownStore("t");
+  const missingUi = () => {
+    throw new Error("Couldn't find the @cstack-dev/town package root above /x.");
+  };
+  const noPort = async () => {
+    throw Object.assign(new Error("listen EADDRNOTAVAIL 127.0.0.1"), { code: "EADDRNOTAVAIL" });
+  };
+  for (const attempt of [openTown(store, missingUi), openTown(store, () => "/ui", noPort)]) {
+    const error = await attempt.catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(CliError);
+    expect((error as Error).message).toContain("Couldn't start the town");
+    expect((error as Error).message).toContain("--terminal");
+  }
+  // The reason is kept.
+  await expect(openTown(store, missingUi)).rejects.toThrow("package root");
 });

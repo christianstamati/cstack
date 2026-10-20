@@ -3,6 +3,7 @@ import { basename, dirname, join, resolve } from "node:path";
 
 import { AGENTS, agentCommandLine, ask, pickAgent, runAgent, type Agent } from "./agent.ts";
 import { isValidProjectName, UsageError, type CliOptions } from "./args.ts";
+import { CliError } from "./errors.ts";
 import { townUnavailableReason } from "./town/fallback.ts";
 import { describeOs, detectTools, formatTools } from "./machine.ts";
 import {
@@ -16,7 +17,7 @@ import {
 // Files an OS drops into folders on its own; a folder holding only these is empty.
 const IGNORED_ENTRIES = new Set([".DS_Store", "Thumbs.db"]);
 
-export class CliError extends Error {}
+export { CliError };
 
 export async function createProject(options: CliOptions): Promise<number> {
   const interactive = process.stdin.isTTY === true && process.stdout.isTTY === true;

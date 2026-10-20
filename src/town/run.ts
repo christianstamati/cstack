@@ -6,10 +6,11 @@ import { fileURLToPath } from "node:url";
 
 import { agentCommandLine, runAgent, type Agent } from "../agent.ts";
 import type { CliOptions } from "../args.ts";
+import { CliError } from "../errors.ts";
 import { townLaunch } from "./launch.ts";
 import { createMcpHandler } from "./mcp.ts";
 import { openBrowser } from "./open-browser.ts";
-import { startTownServer } from "./server.ts";
+import { startTownServer, type TownServer } from "./server.ts";
 import { TownStore } from "./store.ts";
 
 const PACKAGE_NAME = "@cstack-dev/town";
@@ -42,6 +43,23 @@ export function resolveUiDir(): string {
   return join(findPackageRoot(dirname(fileURLToPath(import.meta.url))), "dist", "ui");
 }
 
+/** Starts the town's server. A failure (no built page, no port) becomes a plain error that
+ * says how to go on without the town, instead of a stack trace. */
+export async function openTown(
+  store: TownStore,
+  uiDir: () => string = resolveUiDir,
+  start: typeof startTownServer = startTownServer,
+): Promise<TownServer> {
+  try {
+    return await start({ store, uiDir: uiDir(), mcp: createMcpHandler(store) });
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new CliError(
+      `Couldn't start the town: ${reason}\nRun the same command with --terminal to use the text interview instead.`,
+    );
+  }
+}
+
 export async function runTown(input: {
   options: CliOptions;
   projectDir: string;
@@ -51,11 +69,7 @@ export async function runTown(input: {
 }): Promise<number> {
   const { options } = input;
   const store = new TownStore(input.projectName);
-  const server = await startTownServer({
-    store,
-    uiDir: resolveUiDir(),
-    mcp: createMcpHandler(store),
-  });
+  const server = await openTown(store);
   const launch = townLaunch(input.agent.id, {
     mcpUrl: server.mcpUrl,
     askEverything: options.askEverything,
