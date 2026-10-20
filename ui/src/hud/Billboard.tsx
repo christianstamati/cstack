@@ -1,4 +1,4 @@
-// The billboard: a lit board on two wooden posts at the side of the town, where the
+// The billboard: a minimal panel at the side of the town, where the
 // agent's questions, the plan and the final report appear. Which card it shows comes from
 // `billboardCard`.
 import type { ReactNode } from "react";
@@ -55,15 +55,7 @@ export function Billboard(props: Props) {
   if (!content) return null;
   return (
     <aside className="billboard" aria-label="Billboard">
-      <div className="billboard-lamps" aria-hidden="true">
-        <span />
-        <span />
-      </div>
       <div className="billboard-board">{content}</div>
-      <div className="billboard-posts" aria-hidden="true">
-        <span />
-        <span />
-      </div>
     </aside>
   );
 }
