@@ -1,10 +1,11 @@
 // Pure helpers for the page, kept free of React and three.js so they can be tested.
 import { SLOTS, slotById, type SlotDef, type SlotId } from "../../src/town/catalog.ts";
-import type { Placement, TownState } from "../../src/town/protocol.ts";
+import type { BuildStep, Placement, ReportView, TownState } from "../../src/town/protocol.ts";
 import {
   assignBlocks,
   blockCentre,
   ENTRANCE,
+  ENTRANCE_EDGE,
   GRID,
   nearStreet,
   nextBlock,
@@ -171,9 +172,91 @@ export function modelKindFor(slot: SlotDef, placement: Placement): ModelKind {
   return slot.options.some((option) => option.id === first) ? "building" : "generic";
 }
 
-/** How a building is shown. Only `preview` and `placed` are drawn so far; the build
- * stages come with the build progress. */
+/** How a building is shown: `preview` while an option is hovered, `placed` through the
+ * interview and the plan, then the build stages (see `stageFor`). */
 export type Stage = "preview" | "placed" | "blueprint" | "constructing" | "solid" | "failed";
+
+/** The last build step that covers `slot`, if any. */
+export function latestStep(slot: SlotId, steps: readonly BuildStep[]): BuildStep | undefined {
+  return steps.findLast((step) => step.slots.includes(slot));
+}
+
+/** How `slot`'s building is shown. `placed` in the interview and the plan. In the build, a
+ * blueprint until a step covering it starts, then `constructing`, `solid` once done and
+ * `failed` if its latest step failed. Once done, every building is solid unless it failed. */
+export function stageFor(slot: SlotId, state: TownState): Stage {
+  if (state.phase === "interview" || state.phase === "plan") return "placed";
+  const step = latestStep(slot, state.steps);
+  if (step?.status === "failed") return "failed";
+  if (state.phase === "done") return "solid";
+  if (!step) return "blueprint";
+  return step.status === "started" ? "constructing" : "solid";
+}
+
+/** What the hover label adds about the build: the step building it, or why it failed. */
+export function buildNote(slot: SlotId, state: TownState): string | null {
+  if (state.phase !== "build" && state.phase !== "done") return null;
+  const step = latestStep(slot, state.steps);
+  if (step?.status === "failed") return `Failed: ${step.message?.trim() || step.name}`;
+  if (step?.status === "started" && state.phase === "build") return `Building: ${step.name}`;
+  return null;
+}
+
+/** The slots that have something in the town (the entrance sign counts, as `name`), in
+ * the catalog's order: what "Change something" can pick. */
+export function pickable(placements: Placements): SlotId[] {
+  return SLOTS.filter((slot) => {
+    const placement = placements[slot.id];
+    return placement !== undefined && modelKindFor(slot, placement) !== "notNeeded";
+  }).map((slot) => slot.id);
+}
+
+/** A small sign the final report puts in the town: a to-do (a manual step) by the building
+ * it belongs to, or a warning listing what wasn't verified. Its text is shown on hover. */
+export interface SignSpot {
+  kind: "todo" | "warning";
+  lines: string[];
+  at: Point;
+}
+
+/** Spots along both sides of the entrance road, nearest the slab's edge first. The first
+ * one is the warning's. */
+const ROADSIDE: readonly Point[] = [0.5, 1.1, 1.7, 2.3].flatMap((back): Point[] => [
+  [ENTRANCE_EDGE[0] + 1.25, ENTRANCE_EDGE[1] - back],
+  [ENTRANCE_EDGE[0] - 1.25, ENTRANCE_EDGE[1] - back],
+]);
+
+function roadside(index: number): Point {
+  const [x, z] = ROADSIDE[index % ROADSIDE.length]!;
+  // More signs than spots: another pair of rows, a little further from the road.
+  const out = Math.floor(index / ROADSIDE.length) * 0.55;
+  return [x + Math.sign(x - ENTRANCE_EDGE[0]) * out, z];
+}
+
+/** Where the report's signs stand: each manual step on the sidewalk beside its slot's
+ * building (the fountain's square for the paint), else by the entrance road (no slot, or
+ * nothing of it in the town); the warning for unverified items first by the road. */
+export function signSpots(report: ReportView, placements: Placements): SignSpot[] {
+  const real = new Set(pickable(placements));
+  const blocks = assignBlocks(placements);
+  const bySlot = new Map<SlotId, number>();
+  let atEntrance = 1;
+  const signs: SignSpot[] = report.manualSteps.map(({ slot, text }) => {
+    const cell = slot && real.has(slot) ? blocks[slot] : undefined;
+    const home = slot === "ui" && real.has("ui") ? FOUNTAIN_SPOT : cell ? blockCentre(cell) : null;
+    if (!slot || !home) return { kind: "todo", lines: [text], at: roadside(atEntrance++) };
+    const index = bySlot.get(slot) ?? 0;
+    bySlot.set(slot, index + 1);
+    // Down the block's side that faces the camera, on the sidewalk; then the other side.
+    const side = index < 5 ? 1 : -1;
+    const along = 1.2 - (index % 5) * 0.6;
+    const out = slot === "ui" ? 1.9 : GRID.block / 2 - 0.35;
+    return { kind: "todo", lines: [text], at: [home[0] + side * out, home[1] + along] };
+  });
+  if (report.unverified.length > 0)
+    signs.push({ kind: "warning", lines: [...report.unverified], at: roadside(0) });
+  return signs;
+}
 
 /** The town's paint, from the `ui` styling answer. */
 export interface Theme {
@@ -443,6 +526,38 @@ export function billboardCard(state: TownState): BillboardCard | null {
   if (isPlanWaiting(state)) return "plan";
   if (state.pending) return "question";
   return null;
+}
+
+/** What the billboard says once the finale is over. */
+export const READY_MESSAGE = "Your project is ready. You can close this tab.";
+
+/** How long the finale lasts, in seconds. */
+export const FINALE_SECONDS = 5;
+
+/** The finale: fireworks over the lit town at night, confetti and balloons by day, or no
+ * motion at all when the user asked for less. */
+export type FinaleKind = "night" | "day" | "still";
+
+export function finaleKind(night: number, reducedMotion: boolean): FinaleKind {
+  if (reducedMotion) return "still";
+  return night >= 0.5 ? "night" : "day";
+}
+
+/** How bright a light at `distance` from the town's centre is, `t` seconds into the night
+ * finale, as a multiple of its usual night glow: the town dims, then the lights come on from
+ * the centre outward with a brief flare, and stay a little brighter. */
+export const LIT_LEVEL = 1.35;
+
+export function lightsUpLevel(distance: number, t: number): number {
+  if (t < 0) return 1;
+  if (t >= FINALE_SECONDS) return LIT_LEVEL;
+  const reach = 0.45 + distance * 0.1;
+  if (t < reach) {
+    const u = Math.min(t / 0.35, 1);
+    return 1 - 0.85 * u * u * (3 - 2 * u);
+  }
+  // Blends into the settled level well before the end, so nothing jumps.
+  return LIT_LEVEL + 1.2 * Math.exp(-(t - reach) / 0.35);
 }
 
 /** How far outside its lot's square the crane's mast stands. */

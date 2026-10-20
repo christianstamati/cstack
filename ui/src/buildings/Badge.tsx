@@ -6,7 +6,7 @@ import { DoubleSide, ExtrudeGeometry, Vector3, type Group } from "three";
 import { SVGLoader } from "three/addons/loaders/SVGLoader.js";
 
 import type { SlotId } from "../../../src/town/catalog.ts";
-import { Box, Cyl, PaintedText, stageLook, useKit, type Vec3 } from "./kit.tsx";
+import { Box, Cyl, lookKey, PaintedText, soot, stageLook, useKit, type Vec3 } from "./kit.tsx";
 import { logoFor, plateFor } from "./logos.ts";
 
 /** A 24×24 simple-icons path, extruded `depth` deep and scaled to `size` wide, centred on
@@ -67,9 +67,11 @@ export function Badge({ of, position, rotation, size = 0.6, lit = false }: Badge
       <mesh position={[0, 0, 0.03]}>
         <iconGeometry args={[logo.path, size, 0.04]} />
         <meshStandardMaterial
-          color={logo.hex}
-          emissive={logo.hex}
+          key={lookKey(look)}
+          color={look.wire ?? soot(logo.hex, look.soot)}
+          emissive={look.wire ?? soot(logo.hex, look.soot)}
           emissiveIntensity={(lit ? 0.6 : 0.35) + look.glow}
+          wireframe={look.wire !== null}
           flatShading
           roughness={0.7}
           side={DoubleSide}

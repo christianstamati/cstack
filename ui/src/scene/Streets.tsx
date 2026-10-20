@@ -4,7 +4,7 @@
 // three streets meet. The block itself rises with its sidewalk, street lamps, trees in
 // planters and a bench. Nothing is torn down: re-answering a slot only swaps its building.
 import { useFrame } from "@react-three/fiber";
-import { memo, useMemo, useRef } from "react";
+import { memo, useEffect, useMemo, useRef } from "react";
 import {
   AdditiveBlending,
   BoxGeometry,
@@ -35,6 +35,7 @@ import {
   type Segment,
 } from "../streets.ts";
 import { useNight } from "./daylight.ts";
+import { useLightsUp } from "./finale.ts";
 import { CITY } from "./palette.ts";
 
 /** Height of a block's sidewalk: buildings on a block stand on it. */
@@ -94,7 +95,8 @@ const BENCH = new MeshStandardMaterial({ color: CITY.bench, roughness: 0.8, flat
 const LEAVES = CITY.leaves.map(
   (color) => new MeshStandardMaterial({ color, roughness: 0.9, flatShading: true }),
 );
-/** Lamp heads: pale by day, warm and bright at night. */
+/** Lamp heads: pale by day, warm and bright at night. Each block draws its lamps with its
+ * own copies of these two. */
 const LAMP_HEAD = new MeshStandardMaterial({ color: "#f4f1e6", flatShading: true });
 const LAMP_DAY = new Color("#f4f1e6");
 const LAMP_NIGHT = new Color("#ffd98a");
@@ -335,7 +337,14 @@ export function Streets({ state }: { state: TownState }) {
   );
 }
 
-function Lamp({ x, z }: { x: number; z: number }) {
+/** A block's own lamp materials (a lamp head, its pool of light), so the finale can light
+ * each block's lamps in turn. */
+interface LampLook {
+  head: MeshStandardMaterial;
+  pool: MeshBasicMaterial;
+}
+
+function Lamp({ x, z, look }: { x: number; z: number; look: LampLook }) {
   // The arm reaches over the street from the corner of the block.
   const turn = Math.atan2(Math.sign(x), Math.sign(z));
   return (
@@ -350,11 +359,11 @@ function Lamp({ x, z }: { x: number; z: number }) {
       <mesh geometry={UNIT} material={POST} position={[0, 1.3, 0.16]} scale={[0.05, 0.05, 0.36]} />
       <mesh
         geometry={UNIT}
-        material={LAMP_HEAD}
+        material={look.head}
         position={[0, 1.25, 0.32]}
         scale={[0.16, 0.08, 0.2]}
       />
-      <mesh geometry={POOL} material={LAMP_POOL} position={[0, 0.01, 0.35]} />
+      <mesh geometry={POOL} material={look.pool} position={[0, 0.01, 0.35]} />
     </group>
   );
 }
@@ -411,6 +420,32 @@ const Block = memo(function Block({ cell, born }: { cell: Cell; born: number }) 
   const base = useRef<Group>(null);
   const extras = useRef<Group>(null);
   const done = useRef(false);
+  const lamps = useMemo<LampLook>(() => ({ head: LAMP_HEAD.clone(), pool: LAMP_POOL.clone() }), []);
+  useEffect(
+    () => () => {
+      lamps.head.dispose();
+      lamps.pool.dispose();
+    },
+    [lamps],
+  );
+  // Warm and bright at night; brighter still when the finale lights the town up.
+  const night = useRef(0);
+  const lit = useRef(1);
+  const paint = () => {
+    const glow = night.current * lit.current;
+    lamps.head.color.lerpColors(LAMP_DAY, LAMP_NIGHT, Math.min(glow, 1));
+    lamps.head.emissive.copy(lamps.head.color);
+    lamps.head.emissiveIntensity = 0.1 + glow * 1.6;
+    lamps.pool.opacity = Math.min(glow * 0.32, 0.42);
+  };
+  useNight((value) => {
+    night.current = value;
+    paint();
+  });
+  useLightsUp(base, (level) => {
+    lit.current = level;
+    paint();
+  });
   useFrame(() => {
     if (done.current || !base.current || !extras.current) return;
     const t = now() - born;
@@ -447,8 +482,8 @@ const Block = memo(function Block({ cell, born }: { cell: Cell; born: number }) 
         />
       </group>
       <group ref={extras} visible={false}>
-        <Lamp x={edge * flip} z={edge} />
-        <Lamp x={-edge * flip} z={-edge} />
+        <Lamp x={edge * flip} z={edge} look={lamps} />
+        <Lamp x={-edge * flip} z={-edge} look={lamps} />
         <PlanterTree x={-edge * flip} z={edge} leaves={Math.floor(random() * 5)} />
         <PlanterTree x={edge * flip} z={-edge} leaves={Math.floor(random() * 5)} />
         <Bench x={(random() < 0.5 ? -1 : 1) * 1.0} z={edge + 0.02} turn={0} />
@@ -468,12 +503,6 @@ export function Blocks({ state }: { state: TownState }) {
     if (!born.current.has(key))
       born.current.set(key, first.current.has(key) || prefersReducedMotion() ? -Infinity : now());
   }
-  useNight((night) => {
-    LAMP_HEAD.color.lerpColors(LAMP_DAY, LAMP_NIGHT, night);
-    LAMP_HEAD.emissive.copy(LAMP_HEAD.color);
-    LAMP_HEAD.emissiveIntensity = 0.1 + night * 1.6;
-    LAMP_POOL.opacity = night * 0.32;
-  });
   return (
     <group>
       {cells.map((cell) => (

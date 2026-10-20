@@ -7,6 +7,11 @@ import { useLayoutEffect, useRef } from "react";
 let night = 0;
 const listeners = new Set<(night: number) => void>();
 
+/** How dark it is now. */
+export function currentNight(): number {
+  return night;
+}
+
 /** Set by the sky. Tiny changes are skipped, except reaching full day or night. */
 export function setNight(value: number): void {
   const settled = value === 0 || value === 1;

@@ -1,30 +1,45 @@
 import { expect, test } from "vite-plus/test";
 
 import { SLOTS, takesLot, type SlotId } from "../../src/town/catalog.ts";
-import type { Placement, Question, TownState } from "../../src/town/protocol.ts";
+import type {
+  BuildStep,
+  Placement,
+  Question,
+  ReportView,
+  TownState,
+} from "../../src/town/protocol.ts";
 import {
   answerOutcome,
   BASE_COLORS,
   billboardCard,
+  buildNote,
   craneSpot,
   decorSpots,
   DEFAULT_THEME,
   dropPose,
   EXTRA_SPOTS,
+  FINALE_SECONDS,
+  finaleKind,
   hoverText,
   isPlanWaiting,
   isThinking,
+  latestStep,
+  lightsUpLevel,
   LOT_SIZE,
   FOUNTAIN_SPOT,
   NAME_SPOT,
   spotFor,
   modelKindFor,
   nextLot,
+  pickable,
   projectNameFrom,
   propSpot,
+  READY_MESSAGE,
   readMuted,
   reconnectDelay,
   showTerminalSign,
+  signSpots,
+  stageFor,
   TERMINAL_SIGN_AFTER_MS,
   THEME_COLORS,
   themeFor,
@@ -36,6 +51,7 @@ import {
   assignBlocks,
   blockCentre,
   ENTRANCE,
+  ENTRANCE_EDGE,
   GRID,
   nearStreet,
   SLAB,
@@ -144,6 +160,11 @@ test("mute state round-trips through storage and survives a broken one", () => {
   expect(() => writeMuted(broken, true)).not.toThrow();
   expect(readMuted(undefined)).toBe(false);
 });
+
+/** Is the point on the slab, clear of its edge? */
+function inSlab([x, z]: Point): boolean {
+  return x > SLAB.minX + 0.2 && x < SLAB.maxX - 0.2 && z > SLAB.minZ + 0.2 && z < SLAB.maxZ - 0.2;
+}
 
 /** Is (x, z) on any block of the grid (with `margin` round it), where buildings may go? */
 function inGrid(x: number, z: number, margin = 0): boolean {
@@ -440,4 +461,188 @@ test("the crane stands on the back of its block, off the lot, its hook over the 
     const { x, z } = hookOver(spot);
     expect(inGrid(x, z, -0.2)).toBe(false);
   }
+});
+
+/** A town in the build phase with a frontend and a data building placed. */
+function buildState(overrides: Partial<TownState> = {}): TownState {
+  return stateAt({
+    phase: "build",
+    plan: PLAN,
+    placements: {
+      name: placement("name", [], ["shop"], false, 0),
+      frontend: placement("frontend", ["nextjs"], ["Next.js"], false, 1, 0),
+      data: placement("data", ["convex"], ["Convex"], false, 2, 1),
+    },
+    ...overrides,
+  });
+}
+
+function withStep(state: TownState, step: BuildStep): TownState {
+  return { ...state, steps: [...state.steps, step] };
+}
+
+test("stages follow the build steps", () => {
+  const s = buildState({ steps: [{ name: "Frontend", slots: ["frontend"], status: "started" }] });
+  expect(stageFor("frontend", s)).toBe("constructing");
+  expect(stageFor("data", s)).toBe("blueprint");
+  expect(
+    stageFor("frontend", withStep(s, { name: "Frontend", slots: ["frontend"], status: "done" })),
+  ).toBe("solid");
+  expect(
+    stageFor("frontend", withStep(s, { name: "Frontend", slots: ["frontend"], status: "failed" })),
+  ).toBe("failed");
+});
+
+test("interview and plan show placed buildings", () => {
+  const steps: BuildStep[] = [{ name: "Frontend", slots: ["frontend"], status: "done" }];
+  expect(stageFor("frontend", buildState({ phase: "interview" }))).toBe("placed");
+  expect(stageFor("frontend", buildState({ phase: "plan" }))).toBe("placed");
+  // Back in the interview after "Change something": still placed, whatever came before.
+  expect(stageFor("frontend", buildState({ phase: "interview", steps }))).toBe("placed");
+  expect(stageFor("data", buildState({ phase: "plan", steps }))).toBe("placed");
+});
+
+test("the latest step covering a slot decides its stage", () => {
+  let s = buildState();
+  // Building starts: everything is a blueprint.
+  expect(stageFor("frontend", s)).toBe("blueprint");
+  s = withStep(s, { name: "Scaffold", slots: ["frontend", "data"], status: "started" });
+  expect(stageFor("frontend", s)).toBe("constructing");
+  expect(stageFor("data", s)).toBe("constructing");
+  s = withStep(s, { name: "Scaffold", slots: ["frontend", "data"], status: "done" });
+  s = withStep(s, { name: "Backend", slots: ["data"], status: "started" });
+  expect(stageFor("frontend", s)).toBe("solid");
+  expect(stageFor("data", s)).toBe("constructing");
+  s = withStep(s, { name: "Backend", slots: ["data"], status: "failed", message: "No key" });
+  expect(stageFor("data", s)).toBe("failed");
+  // Retried: building again, then solid.
+  s = withStep(s, { name: "Backend", slots: ["data"], status: "started" });
+  expect(stageFor("data", s)).toBe("constructing");
+  s = withStep(s, { name: "Backend", slots: ["data"], status: "done" });
+  expect(stageFor("data", s)).toBe("solid");
+});
+
+test("when done, every building is solid unless its latest step failed", () => {
+  const steps: BuildStep[] = [
+    { name: "Frontend", slots: ["frontend"], status: "started" },
+    { name: "Backend", slots: ["data"], status: "failed", message: "No key" },
+  ];
+  const done = buildState({ phase: "done", steps });
+  expect(stageFor("frontend", done)).toBe("solid");
+  expect(stageFor("data", done)).toBe("failed");
+  // A slot no step covered: a blueprint through the build, solid at the end.
+  expect(stageFor("structure", buildState({ steps }))).toBe("blueprint");
+  expect(stageFor("structure", done)).toBe("solid");
+});
+
+test("hover notes say what is being built and why a step failed", () => {
+  let s = buildState();
+  expect(buildNote("frontend", s)).toBeNull();
+  s = withStep(s, { name: "Frontend", slots: ["frontend"], status: "started" });
+  expect(buildNote("frontend", s)).toBe("Building: Frontend");
+  expect(latestStep("frontend", s.steps)?.status).toBe("started");
+  expect(latestStep("data", s.steps)).toBeUndefined();
+  s = withStep(s, {
+    name: "Frontend",
+    slots: ["frontend"],
+    status: "failed",
+    message: "Port busy",
+  });
+  expect(buildNote("frontend", s)).toBe("Failed: Port busy");
+  s = withStep(s, { name: "Other", slots: ["data"], status: "failed" });
+  expect(buildNote("data", s)).toBe("Failed: Other");
+  expect(buildNote("frontend", { ...s, phase: "plan" })).toBeNull();
+  s = withStep(s, { name: "Frontend", slots: ["frontend"], status: "done" });
+  expect(buildNote("frontend", s)).toBeNull();
+});
+
+test("only slots with something in the town can be picked to change", () => {
+  const placements = buildState().placements;
+  placements.api = placement("api", [], ["Not needed"], true, 3);
+  placements.ui = placement("ui", ["theme:blue"], ["Blue"], true, 4);
+  placements.authMethods = placement("authMethods", ["google"], ["Google"], false, 5, 2);
+  expect(pickable(placements)).toEqual(["name", "frontend", "data", "authMethods", "ui"]);
+});
+
+const REPORT: ReportView = { built: [], commands: [], manualSteps: [], unverified: [] };
+
+test("manual-step signs stand by their building, or at the entrance", () => {
+  const placements = buildState().placements;
+  placements.api = placement("api", [], ["Not needed"], true, 3);
+  placements.ui = placement("ui", ["theme:blue"], ["Blue"], true, 4);
+  const report: ReportView = {
+    ...REPORT,
+    manualSteps: [
+      { slot: "data", text: "Add your Convex key" },
+      { slot: "data", text: "Run the first deploy" },
+      { slot: null, text: "Create a GitHub repo" },
+      { slot: "api", text: "Nothing to stand by" },
+      { slot: "deploy", text: "Never placed" },
+      { slot: "ui", text: "Pick a logo" },
+    ],
+    unverified: ["Google sign-in", "Email sending"],
+  };
+  const signs = signSpots(report, placements);
+  expect(signs.map((s) => s.kind)).toEqual([
+    "todo",
+    "todo",
+    "todo",
+    "todo",
+    "todo",
+    "todo",
+    "warning",
+  ]);
+  expect(signs[6]!.lines).toEqual(["Google sign-in", "Email sending"]);
+  const near = ([x, z]: Point, [px, pz]: Point, reach: number) =>
+    Math.max(Math.abs(x - px), Math.abs(z - pz)) <= reach;
+  const dataBlock = blockCentre(assignBlocks(placements).data!);
+  for (const sign of signs.slice(0, 2)) {
+    // On the block's sidewalk, beside the lot, off the street.
+    expect(near(sign.at, dataBlock, GRID.block / 2)).toBe(true);
+    expect(near(sign.at, dataBlock, LOT_SIZE / 2 + 0.3)).toBe(false);
+  }
+  expect(near(signs[5]!.at, FOUNTAIN_SPOT, 2.6)).toBe(true);
+  // No slot, not needed or never placed: along the entrance road; so is the warning.
+  for (const sign of [signs[2]!, signs[3]!, signs[4]!, signs[6]!])
+    expect(near(sign.at, ENTRANCE_EDGE, 2.5)).toBe(true);
+  for (const [i, a] of signs.entries()) {
+    expect(nearStreet(...a.at, 0.15)).toBe(false);
+    expect(inSlab(a.at)).toBe(true);
+    for (const b of signs.slice(i + 1))
+      expect(Math.hypot(a.at[0] - b.at[0], a.at[1] - b.at[1])).toBeGreaterThan(0.45);
+  }
+  expect(signSpots(REPORT, placements)).toEqual([]);
+});
+
+test("the lights come on from the centre outward, then settle a little brighter", () => {
+  expect(FINALE_SECONDS).toBeGreaterThanOrEqual(3);
+  expect(FINALE_SECONDS).toBeLessThanOrEqual(6);
+  // Before the show and long after it: steady.
+  expect(lightsUpLevel(3, -1)).toBe(1);
+  const settled = lightsUpLevel(3, FINALE_SECONDS);
+  expect(settled).toBeGreaterThan(1);
+  expect(lightsUpLevel(12, 99)).toBe(settled);
+  // The town dims first, then the middle lights before the edge.
+  expect(lightsUpLevel(12, 0.4)).toBeLessThan(0.5);
+  const lit = (d: number) => {
+    for (let t = 0; t < FINALE_SECONDS; t += 0.02) if (lightsUpLevel(d, t) > 1) return t;
+    return Infinity;
+  };
+  expect(lit(0)).toBeLessThan(lit(6));
+  expect(lit(6)).toBeLessThan(lit(14));
+  expect(lit(14)).toBeLessThan(FINALE_SECONDS * 0.6);
+  // Never blinding, never fully dark.
+  for (let t = 0; t < FINALE_SECONDS; t += 0.05)
+    for (const d of [0, 5, 10, 15]) {
+      expect(lightsUpLevel(d, t)).toBeGreaterThan(0.05);
+      expect(lightsUpLevel(d, t)).toBeLessThan(3);
+    }
+});
+
+test("the finale is fireworks at night, a celebration by day, nothing moving if asked", () => {
+  expect(finaleKind(0.9, false)).toBe("night");
+  expect(finaleKind(0.1, false)).toBe("day");
+  expect(finaleKind(0.9, true)).toBe("still");
+  expect(finaleKind(0.1, true)).toBe("still");
+  expect(READY_MESSAGE).toBe("Your project is ready. You can close this tab.");
 });

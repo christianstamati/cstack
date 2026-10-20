@@ -1,11 +1,14 @@
 // The billboard: a lit board on two wooden posts at the side of the town, where the
-// agent's questions appear. Which card it shows comes from `billboardCard`.
+// agent's questions, the plan and the final report appear. Which card it shows comes from
+// `billboardCard`.
 import type { ReactNode } from "react";
 
 import type { TownState } from "../../../src/town/protocol.ts";
 import { billboardCard, type BillboardCard } from "../logic.ts";
 import type { Town } from "../use-town.ts";
+import { PlanCard } from "./PlanCard.tsx";
 import { QuestionCard } from "./QuestionCard.tsx";
+import { ReportCard } from "./ReportCard.tsx";
 
 type Props = {
   state: TownState;
@@ -26,9 +29,17 @@ function cardFor(card: BillboardCard | null, { state, postAnswer, takeFocus }: P
           takeFocus={takeFocus}
         />
       );
-    // The plan card (Build it / Change something) and the report card go here.
     case "plan":
+      return (
+        <PlanCard
+          plan={state.plan!}
+          placements={state.placements}
+          postAnswer={postAnswer}
+          takeFocus={takeFocus}
+        />
+      );
     case "report":
+      return <ReportCard report={state.report!} takeFocus={takeFocus} />;
     case null:
       return null;
   }

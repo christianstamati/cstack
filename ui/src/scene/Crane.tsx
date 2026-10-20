@@ -1,7 +1,8 @@
 // The thinking crane: while the agent works out its next question, a little tower crane
 // pops up beside the next empty lot and swings a crate over it, with the agent's status
 // line underneath. It folds away when the question arrives, and pops up at the next lot.
-// Once every lot is settled there is no crane, and the status line waits at the bottom.
+// Once every lot is settled there is no crane, and the status line waits at the bottom;
+// it waits there through the build too, saying what the agent is doing.
 import { useFrame } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, type RefObject } from "react";
 import { Vector3, type Group } from "three";
@@ -147,8 +148,14 @@ let labelElement: HTMLDivElement | null = null;
 /** How fast the crane pops up and folds away (per second, exponential). */
 const POP_RATE = 7;
 
+/** The agent is building: its status line waits at the bottom. */
+function isBuilding(state: TownState): boolean {
+  return state.phase === "build" && !state.agentStopped;
+}
+
 export function Crane({ state }: { state: TownState }) {
   const thinking = isThinking(state);
+  const building = isBuilding(state);
   const lot = thinking ? nextLot(state) : null;
   // The lot as a key, and where the crane stands for it (worked out once per lot).
   const target = lot ? lot.join(",") : null;
@@ -191,7 +198,7 @@ export function Crane({ state }: { state: TownState }) {
     if (!element) return;
     // Thinking with every lot settled: no crane, so the line waits at the bottom (docked by
     // its stylesheet).
-    const docked = thinking && target === null && shown.current === null;
+    const docked = (thinking && target === null && shown.current === null) || building;
     if (element.classList.contains("docked") !== docked) element.classList.toggle("docked", docked);
     if (docked) {
       element.style.transform = "";
@@ -234,10 +241,11 @@ export function CraneStatus({ state }: { state: TownState }) {
       labelElement = null;
     };
   }, []);
-  const text = state.status?.trim() || "Thinking…";
+  const building = isBuilding(state);
+  const text = state.status?.trim() || (building ? "Building…" : "Thinking…");
   return (
     <div ref={ref} className="crane-status" role="status" aria-live="polite">
-      {isThinking(state) ? <span className="crane-pill">{text}</span> : null}
+      {isThinking(state) || building ? <span className="crane-pill">{text}</span> : null}
     </div>
   );
 }

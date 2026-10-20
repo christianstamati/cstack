@@ -2,24 +2,35 @@
 // the entrance sign, the props for extras and sign-in methods, and the paint fountain.
 // Each drops in when its answer arrives and shows its label on hover. Buildings face
 // their block's front street (+z) and stand on its sidewalk. A "not needed" answer puts
-// nothing in the town.
-import type { ThreeEvent } from "@react-three/fiber";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+// nothing in the town. Through the build each one shows its stage (see `stageFor`); the
+// entrance sign never changes. In "Change something" every model can be clicked.
+import { useFrame, type ThreeEvent } from "@react-three/fiber";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import { Box3, Vector3, type Group, type Object3D } from "three";
 
 import { SLOTS, type SlotDef, type SlotId } from "../../../src/town/catalog.ts";
 import type { Placement, TownState } from "../../../src/town/protocol.ts";
 import { LogoSign, logoSignHeight } from "../buildings/Badge.tsx";
-import { Drop } from "../buildings/Drop.tsx";
-import { Ball, Box, Cyl, Frame } from "../buildings/kit.tsx";
+import { Drop, prefersReducedMotion } from "../buildings/Drop.tsx";
+import { Ball, Box, Cyl, Frame, Smoke, stageLook, WOOD, Wobble } from "../buildings/kit.tsx";
 import { logoFor } from "../buildings/logos.ts";
 import { buildingFor, propFor } from "../buildings/registry.ts";
 import {
+  buildNote,
   hoverText,
   modelKindFor,
   projectNameFrom,
   propSpot,
   spotFor,
+  stageFor,
   themeFor,
   type Stage,
   type Theme,
@@ -27,11 +38,10 @@ import {
 import { assignBlocks, blockCentre, GRID } from "../streets.ts";
 import { clearHover, setHover } from "./Hover.tsx";
 import { NameSign } from "./NameSign.tsx";
+import { PickRing, usePicker } from "./Pick.tsx";
 import { PaintFountain } from "./Props.tsx";
 import { BLOCK_TOP } from "./Streets.tsx";
 
-/** Every placed model shows as `placed` for now; the build progress adds its stages. */
-const STAGE: Stage = "placed";
 const AUTO_FLAG = "#7fe9ff";
 /** Models are drawn a little larger than their lot units, to read well from afar. */
 const MODEL_SCALE = 1.15;
@@ -59,17 +69,140 @@ function facing(slot: SlotId): number {
   return slot === "ui" ? Math.PI / 2 : 0;
 }
 
-/** Height of the solid parts of `object` above its own origin, in its own units. Glows and beams that don't
- * cast shadows (lamps, light beams) are left out, so a flag sits on the roof. */
-function solidHeight(object: Object3D): number {
+/** The solid parts of a model (glows and beams that cast no shadow, such as lamps and light
+ * beams, are left out, so a flag sits on the roof), in its own units: how tall they stand
+ * above its origin and how far they reach across it. */
+export interface Footprint {
+  height: number;
+  minX: number;
+  maxX: number;
+  minZ: number;
+  maxZ: number;
+}
+
+function measure(object: Object3D): Footprint {
   object.updateWorldMatrix(true, true);
   const box = new Box3();
   object.traverse((child) => {
     if (child.castShadow) box.expandByObject(child, false);
   });
-  const base = new Vector3().setFromMatrixPosition(object.matrixWorld).y;
-  const scale = object.getWorldScale(new Vector3()).y;
-  return box.isEmpty() ? 1 : Math.max((box.max.y - base) / scale, 0.4);
+  if (box.isEmpty()) return { height: 1, minX: -0.5, maxX: 0.5, minZ: -0.5, maxZ: 0.5 };
+  const origin = new Vector3().setFromMatrixPosition(object.matrixWorld);
+  const scale = object.getWorldScale(new Vector3());
+  // Read off the world's axes: right for models that face +z. The fountain turns a quarter
+  // but is round; the entrance sign turns an eighth but never gets scaffolding, only a ring.
+  const [ax, az] = [Math.abs(scale.x), Math.abs(scale.z)];
+  return {
+    height: Math.max((box.max.y - origin.y) / scale.y, 0.4),
+    minX: (box.min.x - origin.x) / ax,
+    maxX: (box.max.x - origin.x) / ax,
+    minZ: (box.min.z - origin.z) / az,
+    maxZ: (box.max.z - origin.z) / az,
+  };
+}
+
+/** How far a footprint reaches from the model's middle, for the ring round it. */
+function reachOf({ minX, maxX, minZ, maxZ }: Footprint): number {
+  return Math.min(Math.max(-minX, maxX, -minZ, maxZ), 2.2);
+}
+
+const SCAFFOLD = "#eaa43c";
+
+/** Scaffolding round a building being built: poles at the corners, rails and planks at each
+ * level, a brace across the front. */
+function Scaffold({ size }: { size: Footprint }) {
+  const pad = 0.14;
+  const [x0, x1, z0, z1] = [size.minX - pad, size.maxX + pad, size.minZ - pad, size.maxZ + pad];
+  const top = size.height + 0.15;
+  const levels = Math.max(2, Math.round(top / 0.75));
+  const step = top / levels;
+  const [w, d] = [x1 - x0, z1 - z0];
+  const brace = Math.hypot(w, step);
+  return (
+    <group>
+      {[x0, x1].flatMap((x) =>
+        [z0, z1].map((z) => (
+          <Cyl
+            key={`${x}:${z}`}
+            position={[x, top / 2, z]}
+            r={0.035}
+            h={top}
+            seg={5}
+            color={SCAFFOLD}
+          />
+        )),
+      )}
+      {Array.from({ length: levels }, (_, i) => {
+        const y = (i + 1) * step;
+        return (
+          <group key={i}>
+            <Box position={[(x0 + x1) / 2, y, z0]} size={[w, 0.04, 0.04]} color={SCAFFOLD} sharp />
+            <Box position={[(x0 + x1) / 2, y, z1]} size={[w, 0.04, 0.04]} color={SCAFFOLD} sharp />
+            <Box position={[x0, y, (z0 + z1) / 2]} size={[0.04, 0.04, d]} color={SCAFFOLD} sharp />
+            <Box position={[x1, y, (z0 + z1) / 2]} size={[0.04, 0.04, d]} color={SCAFFOLD} sharp />
+            <Box
+              position={[(x0 + x1) / 2, y - 0.03, z1 + 0.1]}
+              size={[w, 0.03, 0.2]}
+              color={WOOD}
+            />
+            <Box
+              position={[(x0 + x1) / 2, y - step / 2, z1 + 0.02]}
+              rotation={[0, 0, (i % 2 === 0 ? 1 : -1) * Math.atan2(step, w)]}
+              size={[brace, 0.03, 0.03]}
+              color={SCAFFOLD}
+              sharp
+            />
+          </group>
+        );
+      })}
+    </group>
+  );
+}
+
+const FAIL_RED = "#e5484d";
+
+/** A failed step: dark smoke from the roof and a red flag on its corner. */
+function FailedMarks({ size }: { size: Footprint }) {
+  return (
+    <group>
+      <Smoke
+        position={[(size.minX + size.maxX) / 4, size.height, (size.minZ + size.maxZ) / 2]}
+        color="#55545e"
+        size={1.9}
+      />
+      <group position={[size.maxX - 0.15, size.height - 0.02, size.maxZ - 0.15]}>
+        <Cyl position={[0, 0.42, 0]} r={0.025} h={0.84} seg={4} color="#d8dbe5" />
+        <Wobble kind="sway" axis="y" amount={0.3} speed={3.2} position={[0, 0.72, 0]}>
+          <Box
+            position={[0.19, 0, 0]}
+            size={[0.36, 0.24, 0.02]}
+            color={FAIL_RED}
+            glow={0.6}
+            sharp
+          />
+        </Wobble>
+      </group>
+    </group>
+  );
+}
+
+/** A small bounce, over and over, while `on` (a building being built). */
+function useBounce(group: RefObject<Group | null>, on: boolean): void {
+  const still = useMemo(prefersReducedMotion, []);
+  useFrame(({ clock }) => {
+    const g = group.current;
+    if (!g) return;
+    if (!on || still) {
+      if (g.position.y !== 0 || g.scale.y !== 1) {
+        g.position.y = 0;
+        g.scale.set(1, 1, 1);
+      }
+      return;
+    }
+    const hop = Math.abs(Math.sin((clock.elapsedTime * Math.PI) / 0.8));
+    g.position.y = 0.09 * hop;
+    g.scale.set(1 - 0.015 * hop, 1 + 0.03 * hop, 1 - 0.015 * hop);
+  });
 }
 
 /** The small "auto" pennant on the roof of an answer the agent settled by itself. */
@@ -91,37 +224,53 @@ interface SignedProps {
   logo?: `${SlotId}:${string}`;
   /** Width of that logo, in model units. */
   logoSize?: number;
-  /** Called once with the model's measured height and whether it got a logo sign. */
-  onMeasure?: (height: number, hasSign: boolean) => void;
+  /** Called once with the model's measured size and whether it got a logo sign. */
+  onMeasure?: (size: Footprint, hasSign: boolean) => void;
   onPointerOver?: (event: ThreeEvent<PointerEvent>) => void;
   onPointerOut?: (event: ThreeEvent<PointerEvent>) => void;
+  onClick?: (event: ThreeEvent<MouseEvent>) => void;
   children: ReactNode;
 }
 
 /** A model with its logo sign (or the "auto" flag) on its roof. The whole of it, sign
- * included, is drawn in `stage`'s look: the stage provider wraps the sign too. */
+ * included, is drawn in `stage`'s look: the stage provider wraps the sign too, and the
+ * look says whether it gets scaffolding and a bounce, or smoke and a red flag. */
 export function Signed(props: SignedProps) {
   const { stage, theme, auto, logo, logoSize = 0.95, onMeasure } = props;
+  const look = stageLook(stage);
   const content = useRef<Group>(null);
-  const [height, setHeight] = useState<number | null>(null);
+  const bouncing = useRef<Group>(null);
+  const [size, setSize] = useState<Footprint | null>(null);
   const [slot, optionId] = logo?.split(":") ?? [];
   const hasSign = slot !== undefined && logoFor(slot as SlotId, optionId ?? "") !== null;
   useLayoutEffect(() => {
     if (!content.current) return;
-    const measured = solidHeight(content.current);
-    setHeight(measured);
+    const measured = measure(content.current);
+    setSize(measured);
     onMeasure?.(measured, hasSign);
     // Measured once: a new answer remounts the model.
   }, []);
+  useBounce(bouncing, look.scaffold);
+  const height = size?.height ?? null;
   return (
     <Frame stage={stage} theme={theme}>
-      <group ref={content} onPointerOver={props.onPointerOver} onPointerOut={props.onPointerOut}>
-        {props.children}
-        {logo && hasSign && height !== null ? (
-          <LogoSign of={logo} position={[0, height - 0.05, 0]} size={logoSize} auto={auto} />
-        ) : null}
+      <group
+        onPointerOver={props.onPointerOver}
+        onPointerOut={props.onPointerOut}
+        onClick={props.onClick}
+      >
+        <group ref={bouncing}>
+          <group ref={content}>
+            {props.children}
+            {logo && hasSign && height !== null ? (
+              <LogoSign of={logo} position={[0, height - 0.05, 0]} size={logoSize} auto={auto} />
+            ) : null}
+          </group>
+          {auto && !hasSign && height !== null ? <AutoFlag y={height} /> : null}
+        </group>
+        {look.scaffold && size ? <Scaffold size={size} /> : null}
+        {look.failed && size ? <FailedMarks size={size} /> : null}
       </group>
-      {auto && !hasSign && height !== null ? <AutoFlag y={height} /> : null}
     </Frame>
   );
 }
@@ -134,6 +283,9 @@ interface PlacedProps {
   placements: Placements;
   placement: Placement;
   theme: Theme;
+  stage: Stage;
+  /** What the build says about it (see `buildNote`), for the hover label. */
+  note: string | null;
   auto: boolean;
   logo?: `${SlotId}:${string}`;
   logoSize?: number;
@@ -159,36 +311,69 @@ export function OnSpot(props: {
   );
 }
 
-/** Drops a model onto its spot and anchors the hover label above its roof. */
+/** How far the pointer may move between press and release for a click to count as a pick
+ * (more is the user turning the view). */
+const CLICK_SLOP = 6;
+
+/** Drops a model onto its spot and anchors the hover label above its roof. In pick mode it
+ * glows with a ring round its foot and a click on it picks its slot. */
 function Placed(props: PlacedProps) {
-  const { id, slot, at, placements, placement, theme, auto, logo, logoSize = 0.95 } = props;
+  const { id, slot, at, placements, placement, theme, stage, note, auto, logo } = props;
+  const logoSize = props.logoSize ?? 0.95;
   const [x, z] = at;
   const y = groundAt(slot, at, placements);
   const top = useRef(2);
+  const [reach, setReach] = useState(1.2);
+  const pick = usePicker();
+  const [hot, setHot] = useState(false);
   useEffect(() => () => clearHover(id), [id]);
+  // Pick mode over: nothing is hot any more.
+  useEffect(() => {
+    if (pick) return;
+    setHot(false);
+    document.body.style.cursor = "";
+  }, [pick]);
   const text = hoverText(placement);
   const over = (event: ThreeEvent<PointerEvent>) => {
     event.stopPropagation();
-    setHover({ id, ...text, anchor: [x, y + top.current * MODEL_SCALE, z] });
+    const detail = pick ? "Click to change this" : (note ?? text.detail);
+    setHover({ id, title: text.title, detail, anchor: [x, y + top.current * MODEL_SCALE, z] });
+    if (pick) {
+      setHot(true);
+      document.body.style.cursor = "pointer";
+    }
   };
   const out = (event: ThreeEvent<PointerEvent>) => {
     event.stopPropagation();
     clearHover(id);
+    setHot(false);
+    if (pick) document.body.style.cursor = "";
+  };
+  const click = (event: ThreeEvent<MouseEvent>) => {
+    if (!pick || event.delta > CLICK_SLOP) return;
+    event.stopPropagation();
+    clearHover(id);
+    document.body.style.cursor = "";
+    pick(slot);
   };
   return (
     <OnSpot slot={slot} at={at} placements={placements}>
+      {pick ? <PickRing radius={reach + 0.12} hot={hot} /> : null}
       <Drop>
         <Signed
-          stage={STAGE}
+          stage={stage}
           theme={theme}
           auto={auto}
           logo={logo}
           logoSize={logoSize}
-          onMeasure={(height, hasSign) => {
-            top.current = height + (hasSign ? logoSignHeight(logoSize) : auto ? 0.65 : 0) + 0.3;
+          onMeasure={(size, hasSign) => {
+            top.current =
+              size.height + (hasSign ? logoSignHeight(logoSize) : auto ? 0.65 : 0) + 0.3;
+            setReach(reachOf(size));
           }}
           onPointerOver={over}
           onPointerOut={out}
+          onClick={click}
         >
           {props.children}
         </Signed>
@@ -203,8 +388,10 @@ function SlotPlacement(props: {
   placements: Placements;
   theme: Theme;
   projectName: string;
+  stage: Stage;
+  note: string | null;
 }) {
-  const { slot, placement, placements, theme } = props;
+  const { slot, placement, placements, theme, stage, note } = props;
   const lot = spotFor(slot.id, placements);
   const kind = modelKindFor(slot, placement);
   switch (kind) {
@@ -224,10 +411,12 @@ function SlotPlacement(props: {
           id={`${slot.id}:${optionId}`}
           at={lot}
           placement={placement}
+          stage={stage}
+          note={note}
           auto={placement.auto}
           logo={`${slot.id}:${optionId}`}
         >
-          <Model label={placement.labels[0] ?? optionId} stage={STAGE} theme={theme} />
+          <Model label={placement.labels[0] ?? optionId} stage={stage} theme={theme} />
         </Placed>
       );
     }
@@ -242,9 +431,12 @@ function SlotPlacement(props: {
           id={`${slot.id}:${name}`}
           at={lot}
           placement={{ ...placement, labels: [name] }}
+          // The entrance sign stays as it is through the build.
+          stage="placed"
+          note={null}
           auto={false}
         >
-          <NameSign label={name} stage={STAGE} theme={theme} />
+          <NameSign label={name} stage="placed" theme={theme} />
         </Placed>
       );
     }
@@ -258,9 +450,11 @@ function SlotPlacement(props: {
           id={slot.id}
           at={lot}
           placement={placement}
+          stage={stage}
+          note={note}
           auto={false}
         >
-          <PaintFountain stage={STAGE} theme={theme} />
+          <PaintFountain stage={stage} theme={theme} />
         </Placed>
       );
     case "props":
@@ -278,11 +472,13 @@ function SlotPlacement(props: {
                 id={`${slot.id}:${optionId}`}
                 at={propSpot(slot.id, optionId, index, placements)}
                 placement={{ ...placement, optionIds: [optionId], labels: [label] }}
+                stage={stage}
+                note={note}
                 auto={placement.auto}
                 logo={`${slot.id}:${optionId}`}
                 logoSize={propLogoSize(slot.id)}
               >
-                <Model label={label} stage={STAGE} theme={theme} />
+                <Model label={label} stage={stage} theme={theme} />
               </Placed>
             );
           })}
@@ -307,6 +503,8 @@ export function Placements({ state }: { state: TownState }) {
             placements={state.placements}
             theme={theme}
             projectName={state.projectName}
+            stage={stageFor(slot.id, state)}
+            note={buildNote(slot.id, state)}
           />
         ) : null;
       })}

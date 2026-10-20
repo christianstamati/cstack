@@ -11,10 +11,12 @@ import { Clouds } from "./scene/Clouds.tsx";
 import { Crane, CraneStatus } from "./scene/Crane.tsx";
 import { Ground } from "./scene/Ground.tsx";
 import { HoverLabel, HoverTracker } from "./scene/Hover.tsx";
+import { LightsUp } from "./scene/LightsUp.tsx";
 import { Links } from "./scene/Links.tsx";
 import { SurveyPlot } from "./scene/Lots.tsx";
 import { Placements } from "./scene/Placements.tsx";
 import { Preview } from "./scene/Preview.tsx";
+import { Signs } from "./scene/Signs.tsx";
 import { Sky, SkyBackdrop } from "./scene/Sky.tsx";
 import { Blocks, Streets } from "./scene/Streets.tsx";
 import { Traffic } from "./scene/Traffic.tsx";
@@ -23,6 +25,8 @@ import { useTown, type Town } from "./use-town.ts";
 
 function statusLine(town: Town): string | null {
   if (!town.hasToken) return "Open the link printed in your terminal to see your town.";
+  // After the report the billboard says the project is ready; nothing to add.
+  if (town.state?.phase === "done" && town.state.report) return null;
   if (town.state?.agentStopped) return "The agent stopped. You can close this tab.";
   if (!town.connected) return "Connecting…";
   return null;
@@ -59,6 +63,8 @@ export function App() {
             <SurveyPlot state={town.state} />
             <Preview state={town.state} />
             <Crane state={town.state} />
+            <Signs state={town.state} />
+            <LightsUp state={town.state} entered={entered} />
           </>
         ) : null}
         <Camera state={town.state} />

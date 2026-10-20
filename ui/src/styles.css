@@ -605,3 +605,220 @@ body,
 .crane-status.docked .crane-pill {
   translate: -50% 0;
 }
+
+/* The plan and the report on the billboard. */
+.plan-rows {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: #fffaf0;
+  border: 2px solid #ecdfbf;
+}
+
+.plan-row {
+  display: grid;
+  grid-template-columns: minmax(96px, 40%) 1fr;
+  gap: 10px;
+  font-size: 14px;
+}
+
+.plan-row dt {
+  color: var(--paper-soft);
+}
+
+.plan-row dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-weight: 700;
+}
+
+.plan-auto {
+  padding: 0 7px;
+  border-radius: 999px;
+  background: #d3f3fa;
+  color: #135a6a;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.plan-section {
+  display: grid;
+  gap: 4px;
+}
+
+.plan-section h3 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--paper-soft);
+}
+
+.plan-list {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding-left: 18px;
+  font-size: 14px;
+}
+
+.plan-list code,
+.report-command code,
+.plan-tree pre {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12.5px;
+}
+
+.plan-tree summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--paper-soft);
+}
+
+.plan-tree pre {
+  max-height: 180px;
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  overflow: auto;
+  border-radius: 10px;
+  background: #f3e6c6;
+  line-height: 1.35;
+}
+
+.plan-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.plan-secondary,
+.plan-pick,
+.report-copy {
+  padding: 9px 16px;
+  border: 2px solid var(--wood);
+  border-radius: 12px;
+  background: #fffaf0;
+  color: var(--paper-ink);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.plan-secondary:hover:not(:disabled),
+.plan-pick:hover:not(:disabled),
+.report-copy:hover {
+  background: #fff1d0;
+}
+
+.plan-secondary:focus-visible,
+.plan-pick:focus-visible,
+.report-copy:focus-visible {
+  outline: 3px solid #e8833a;
+  outline-offset: 2px;
+}
+
+.plan-secondary:disabled,
+.plan-pick:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.plan-picks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.plan-picks-label {
+  width: 100%;
+  font-size: 13px;
+  color: var(--paper-soft);
+}
+
+.plan-pick {
+  padding: 4px 10px;
+  border-width: 1.5px;
+  font-size: 13px;
+}
+
+.report:focus {
+  outline: none;
+}
+
+.report-ready {
+  animation: ready-in 500ms ease-out;
+}
+
+@keyframes ready-in {
+  from {
+    opacity: 0;
+    translate: 0 6px;
+  }
+}
+
+.report-built li::marker {
+  content: "✓  ";
+  color: #3f8a2a;
+}
+
+.report-unverified li::marker {
+  content: "!  ";
+  color: #b9770e;
+  font-weight: 700;
+}
+
+.report-commands {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.report-command {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 6px 6px 10px;
+  border-radius: 12px;
+  background: #2b2116;
+  color: #fbf0d6;
+}
+
+.report-command code {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.report-copy {
+  flex: none;
+  padding: 4px 10px;
+  border-width: 1.5px;
+  font-size: 12px;
+}
+
+.report-slot {
+  margin-left: 6px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: #efe1bd;
+  color: var(--paper-soft);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .report-ready {
+    animation: none;
+  }
+}

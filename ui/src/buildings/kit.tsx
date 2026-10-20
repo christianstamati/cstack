@@ -7,15 +7,24 @@
 //
 // A building wraps its parts in <Frame stage theme>. Every material (parts, logos, painted
 // text, smoke, blinking lights) takes its stage styling from `stageLook`, the one place a
-// stage's look is decided: `preview` is translucent. The build stages (blueprint,
-// constructing, solid, failed) are added there.
+// stage's look is decided: `preview` is translucent, `blueprint` a glowing see-through
+// wireframe, `constructing` gets scaffolding and a little bounce, `failed` turns sooty with
+// smoke and a red flag; `placed` and `solid` are the building as it is.
 import { extend, useFrame, type ThreeElement } from "@react-three/fiber";
 import { createContext, useContext, useMemo, useRef, type ReactNode } from "react";
-import { Color, Shape, SRGBColorSpace, type Group, type MeshStandardMaterial } from "three";
+import {
+  Color,
+  Shape,
+  SRGBColorSpace,
+  type Group,
+  type Mesh,
+  type MeshStandardMaterial,
+} from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 
 import { DEFAULT_THEME, type Stage, type Theme } from "../logic.ts";
 import { useNight } from "../scene/daylight.ts";
+import { useLightsUp } from "../scene/finale.ts";
 
 declare module "@react-three/fiber" {
   interface ThreeElements {
@@ -59,13 +68,38 @@ export interface StageLook {
   depthWrite: boolean;
   /** Extra self-light added to every surface. */
   glow: number;
+  /** Surfaces are drawn as a wireframe glowing in this colour (a blueprint), or null. */
+  wire: string | null;
+  /** How far colours fade towards soot (0 to 1). */
+  soot: number;
+  /** Scaffolding round the building, which bounces a little: it is being built. */
+  scaffold: boolean;
+  /** Smoke from the roof and a red flag: its build step failed. */
+  failed: boolean;
 }
+
+/** The blueprint's glowing blue lines. */
+const BLUEPRINT = "#8fd8ff";
 
 /** How `stage` changes a material whose own opacity is `opacity`. */
 export function stageLook(stage: Stage, opacity = 1): StageLook {
-  const stageOpacity = stage === "preview" ? 0.45 : 1;
+  const stageOpacity = stage === "preview" ? 0.45 : stage === "blueprint" ? 0.7 : 1;
   const alpha = opacity * stageOpacity;
-  return { opacity: alpha, transparent: alpha < 1, depthWrite: alpha >= 1, glow: 0 };
+  return {
+    opacity: alpha,
+    transparent: alpha < 1,
+    depthWrite: alpha >= 1,
+    glow: stage === "blueprint" ? 0.9 : 0,
+    wire: stage === "blueprint" ? BLUEPRINT : null,
+    soot: stage === "failed" ? 0.4 : 0,
+    scaffold: stage === "constructing",
+    failed: stage === "failed",
+  };
+}
+
+/** Remounts a material when the stage changes how it is drawn (see three's needsUpdate). */
+export function lookKey(look: StageLook): string {
+  return `${look.transparent}:${look.wire !== null}`;
 }
 
 /** The root of every building: hands the stage and theme to its parts. */
@@ -85,6 +119,25 @@ const SELF_LIGHT = 0.07;
 /** How far colours are softened towards a warm white. */
 const PASTEL = 0.14;
 const pastels = new Map<string, string>();
+
+const SOOT = [74, 70, 72];
+const sooted = new Map<string, string>();
+
+/** `color` (a #rrggbb hex) faded `amount` of the way to soot, as after a fire. */
+export function soot(color: string, amount: number): string {
+  if (amount <= 0 || !/^#[0-9a-f]{6}$/i.test(color)) return color;
+  const key = `${color}:${amount}`;
+  let dark = sooted.get(key);
+  if (dark === undefined) {
+    const n = Number.parseInt(color.slice(1), 16);
+    const channels = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((c, i) =>
+      Math.round(c + (SOOT[i]! - c) * amount),
+    );
+    dark = `#${channels.map((c) => c.toString(16).padStart(2, "0")).join("")}`;
+    sooted.set(key, dark);
+  }
+  return dark;
+}
 
 /** `color` (a #rrggbb hex) softened into the town's pastel palette. */
 export function pastel(color: string): string {
@@ -117,15 +170,17 @@ export function Mat({ color, glow = false, opacity = 1 }: MatProps) {
   // Every part glows a little in its own colour, so shadowed sides keep their toy colours;
   // lamps and neon glow fully.
   const strength = glow === true ? 1 : glow === false ? SELF_LIGHT : Math.max(glow, SELF_LIGHT);
-  const soft = pastel(color);
+  const soft = look.wire ?? soot(pastel(color), look.soot);
   return (
     <meshStandardMaterial
+      key={lookKey(look)}
       color={soft}
       flatShading
       roughness={0.85}
       metalness={0}
       emissive={soft}
-      emissiveIntensity={strength + look.glow}
+      emissiveIntensity={look.wire ? look.glow : strength + look.glow}
+      wireframe={look.wire !== null}
       transparent={look.transparent}
       opacity={look.opacity}
       depthWrite={look.depthWrite}
@@ -283,30 +338,59 @@ const GLASS = "#bfe0ee";
  * `color`, softened by day). Faces +z unless rotated. */
 export function Win(props: Placed & { w?: number; h?: number; color?: string }) {
   const look = stageLook(useKit().stage);
+  const mesh = useRef<Mesh>(null);
   const material = useRef<MeshStandardMaterial>(null);
   const tint = props.color;
   const colors = useMemo(
-    () => ({ day: new Color(tint ? pastel(tint) : GLASS), night: new Color(tint ?? LAMP) }),
-    [tint],
+    () => ({
+      day: new Color(soot(tint ? pastel(tint) : GLASS, look.soot)),
+      night: new Color(soot(tint ?? LAMP, look.soot)),
+      wire: new Color(look.wire ?? GLASS),
+    }),
+    [tint, look.soot, look.wire],
   );
+  const night = useRef(0);
+  /** The finale's lights-up level (1 outside it). */
+  const lit = useRef(1);
+  const paint = () => {
+    const m = material.current;
+    if (!m) return;
+    if (look.wire) {
+      m.color.copy(colors.wire);
+      m.emissive.copy(colors.wire);
+      m.emissiveIntensity = look.glow;
+      return;
+    }
+    const glow = night.current * lit.current;
+    m.color.lerpColors(colors.day, colors.night, Math.min(glow, 1));
+    m.emissive.copy(m.color);
+    m.emissiveIntensity = (tint ? 0.45 : 0.12) + glow * 0.85 + look.glow;
+  };
   useNight(
-    (night) => {
-      const m = material.current;
-      if (!m) return;
-      m.color.lerpColors(colors.day, colors.night, night);
-      m.emissive.copy(m.color);
-      m.emissiveIntensity = (tint ? 0.45 : 0.12) + night * 0.85 + look.glow;
+    (value) => {
+      night.current = value;
+      paint();
     },
-    [colors, look.glow],
+    [colors, look.glow, look.wire],
   );
+  useLightsUp(mesh, (level) => {
+    lit.current = level;
+    paint();
+  });
   return (
-    <mesh position={props.position} rotation={props.rotation}>
+    <mesh ref={mesh} position={props.position} rotation={props.rotation}>
       <boxGeometry args={[props.w ?? 0.32, props.h ?? 0.38, 0.05]} />
       <meshStandardMaterial
-        ref={material}
+        key={lookKey(look)}
+        ref={(m) => {
+          material.current = m;
+          // A new material (the stage changed): paint it at once.
+          if (m) paint();
+        }}
         flatShading
         roughness={0.3}
         metalness={0.05}
+        wireframe={look.wire !== null}
         transparent={look.transparent}
         opacity={look.opacity}
         depthWrite={look.depthWrite}
@@ -370,7 +454,12 @@ export function PaintedText(props: Placed & { text: string; w: number; h: number
   return (
     <mesh position={props.position} rotation={props.rotation} scale={props.scale}>
       <planeGeometry args={[w, h]} />
-      <meshBasicMaterial transparent opacity={look.opacity} depthWrite={false}>
+      <meshBasicMaterial
+        transparent
+        opacity={look.opacity}
+        depthWrite={false}
+        color={look.wire ?? soot("#ffffff", look.soot)}
+      >
         <canvasTexture attach="map" args={[canvas]} colorSpace={SRGBColorSpace} />
       </meshBasicMaterial>
     </mesh>
@@ -442,8 +531,9 @@ export function Wobble(
   );
 }
 
-/** Puffs of smoke rising from a chimney and fading. */
-export function Smoke(props: Placed) {
+/** Puffs of smoke rising from a chimney and fading; `color` and `size` for a bigger, darker
+ * plume. */
+export function Smoke(props: Placed & { color?: string; size?: number }) {
   const puffs = useRef<Array<Group | null>>([]);
   const materials = useRef<Array<MeshStandardMaterial | null>>([]);
   const look = stageLook(useKit().stage);
@@ -454,7 +544,7 @@ export function Smoke(props: Placed) {
       const material = materials.current[i];
       if (!puff || !material) continue;
       puff.position.set(Math.sin(t * 4 + i) * 0.08, t * 1.1, 0);
-      puff.scale.setScalar(0.4 + t * 0.9);
+      puff.scale.setScalar((0.4 + t * 0.9) * (props.size ?? 1));
       material.opacity = 0.55 * look.opacity * (1 - t);
     }
   });
@@ -466,7 +556,7 @@ export function Smoke(props: Placed) {
             <icosahedronGeometry args={[0.14, 0]} />
             <meshStandardMaterial
               ref={(m) => void (materials.current[i] = m)}
-              color="#d7dae6"
+              color={props.color ?? "#d7dae6"}
               flatShading
               transparent
               depthWrite={false}
@@ -495,9 +585,11 @@ export function Blinker(
     <mesh position={props.position} rotation={props.rotation}>
       <boxGeometry args={[size, size, size * 0.5]} />
       <meshStandardMaterial
+        key={lookKey(look)}
         ref={material}
-        color={props.color}
-        emissive={props.color}
+        color={look.wire ?? props.color}
+        emissive={look.wire ?? props.color}
+        wireframe={look.wire !== null}
         flatShading
         transparent={look.transparent}
         opacity={look.opacity}
