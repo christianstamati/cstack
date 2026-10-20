@@ -30,7 +30,10 @@ test("TOWN.md names every slot and option id in the catalog", () => {
 
 test("town mode appends the section; terminal mode doesn't", () => {
   expect(fillBootstrapPrompt(facts, { town: true })).toContain(TOWN_PROMPT);
-  expect(fillBootstrapPrompt(facts)).not.toContain("# Town mode");
+  const plain = fillBootstrapPrompt(facts);
+  expect(plain).not.toContain("# Town mode");
+  expect(fillBootstrapPrompt(facts, { town: false })).toBe(plain);
+  expect(plain).toBe(fillBootstrapPrompt(facts, undefined));
 });
 
 test("catalog lots are unique", () => {
