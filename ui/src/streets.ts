@@ -1,14 +1,14 @@
 // The city's grid and its streets, as pure data: which block each answer builds on, which
-// streets are paved for the blocks placed so far, the routes along them and how many cars
+// streets are paved for the blocks taken so far, the routes along them and how many cars
 // drive there. No React or three.js, so it can be tested.
 //
-// Blocks sit on a square grid, separated by streets. Answers take blocks in the order they
-// come in (their `seq`), spiralling out from the central block, so the town always grows
-// from the middle whatever the interview asks first. Columns run along x and rows along z;
+// Blocks sit on a square grid, separated by streets. The store hands each building the next
+// block nobody has had (its `lot`), spiralling out from the central block, so the town
+// always grows from the middle whatever the interview asks first, and nothing ever moves. Columns run along x and rows along z;
 // +x and +z run towards the default camera, and the entrance is on the +z side. Streets
 // are worked out on a graph whose nodes sit every half block along the street centre-lines:
 // at the crossings, and at the middle of each block's side, where its kerb is.
-import { slotById, type SlotId } from "../../src/town/catalog.ts";
+import { takesLot, type SlotId } from "../../src/town/catalog.ts";
 import type { Placement } from "../../src/town/protocol.ts";
 
 export const GRID = {
@@ -93,31 +93,22 @@ export function kerbOf(cell: Cell): Point {
 
 type Placements = Partial<Record<SlotId, Placement>>;
 
-/** Does this placement build on a block? Buildings and props do; the name is the entrance
- * sign, the paint has none, and "not needed" puts nothing in the town. */
-export function takesBlock(placement: Placement | undefined): placement is Placement {
-  if (!placement || placement.optionIds.length === 0) return false;
-  const kind = slotById(placement.slot).kind;
-  return kind === "building" || kind === "props";
-}
-
-/** The block each placement builds on: the k-th placement that takes a block (by seq) gets
- * the k-th cell of the spiral. A re-answer keeps its seq, so it keeps its block. */
+/** The block each slot was given: `SPIRAL[lot]`. A slot keeps its block when it turns
+ * "not needed" (the block stays, empty), so blocks never move or disappear. */
 export function assignBlocks(placements: Placements): Partial<Record<SlotId, Cell>> {
-  const taking = Object.values(placements)
-    .filter(takesBlock)
-    .sort((a, b) => a.seq - b.seq);
   const blocks: Partial<Record<SlotId, Cell>> = {};
-  taking.forEach((placement, k) => {
-    const cell = SPIRAL[k];
+  for (const placement of Object.values(placements)) {
+    const cell = placement.lot === null ? undefined : SPIRAL[placement.lot];
     if (cell) blocks[placement.slot] = cell;
-  });
+  }
   return blocks;
 }
 
-/** The block the next building will take, or null once the grid is full. */
+/** The block the next building will take: the first one nobody has had; null once the
+ * grid is full. */
 export function nextBlock(placements: Placements): Cell | null {
-  return SPIRAL[Object.values(placements).filter(takesBlock).length] ?? null;
+  const used = Object.values(placements).map((placement) => placement.lot ?? -1);
+  return SPIRAL[Math.max(-1, ...used) + 1] ?? null;
 }
 
 const near = (value: number) => Math.abs(value - Math.round(value)) < 1e-6;
@@ -220,10 +211,9 @@ export function builtStreets(placements: Placements): Segment[] {
 function kerbNodeOf(slot: SlotId, placements: Placements): Node | null {
   const placement = placements[slot];
   if (!placement) return null;
-  const kind = slotById(slot).kind;
-  if (kind === "sign" || kind === "paint") return ENTRANCE_NODE;
+  if (slot === "name" || slot === "ui") return ENTRANCE_NODE;
   const cell = assignBlocks(placements)[slot];
-  return cell ? kerbNode(cell) : null;
+  return cell && takesLot(slot, placement.optionIds) ? kerbNode(cell) : null;
 }
 
 /** The way from `a`'s kerb to `b`'s along the streets built for `placements`: its start,

@@ -2,25 +2,21 @@ import { expect, test } from "vite-plus/test";
 
 import { SLOTS, type SlotId } from "../../src/town/catalog.ts";
 import type { Placement } from "../../src/town/protocol.ts";
+import { TownStore } from "../../src/town/store.ts";
 import { framePoints, frameFor, VIEW, zoomFor, type Frame } from "./framing.ts";
 import { NAME_SPOT } from "./logic.ts";
 import { SLAB, type Point } from "./streets.ts";
 
 type Placements = Partial<Record<SlotId, Placement>>;
 
+/** The agent decided these slots in this order, each with its first option. */
 function placed(...slots: SlotId[]): Placements {
-  const placements: Placements = {};
-  slots.forEach((id, seq) => {
+  const store = new TownStore("t");
+  for (const id of slots) {
     const option = SLOTS.find((s) => s.id === id)!.options[0];
-    placements[id] = {
-      slot: id,
-      optionIds: option ? [option.id] : [],
-      labels: ["x"],
-      auto: false,
-      seq,
-    };
-  });
-  return placements;
+    store.decide({ slot: id, optionIds: option ? [option.id] : [], labels: ["x"], reason: "x" });
+  }
+  return store.getState().placements;
 }
 
 const dot = (a: readonly number[], b: readonly number[]) =>

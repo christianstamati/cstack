@@ -119,6 +119,7 @@ test("decide places an auto building", async () => {
     auto: true,
     reason: "Convex has an API",
     seq: 0,
+    lot: null,
   });
 });
 

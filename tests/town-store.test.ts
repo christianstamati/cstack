@@ -122,6 +122,7 @@ test("decide accepts an empty optionIds for slots that do not apply", () => {
     auto: true,
     reason: "No database",
     seq: 0,
+    lot: null,
   });
 });
 
@@ -285,4 +286,48 @@ test("a question that cannot be answered is refused", () => {
   expect(() => store.ask({ ...frontendQ, options: [opt("a"), opt("a")] })).toThrow("unique");
   expect(store.getState().pending).toBeNull();
   void store.ask({ ...frontendQ, options: [], freeText: true });
+});
+
+test("real buildings get the next lot; lots never move or get handed out twice", () => {
+  const store = new TownStore("my-app");
+  const decide = (
+    slot: "name" | "structure" | "toolchain" | "api" | "frontend" | "ui",
+    ids: string[],
+  ) => store.decide({ slot, optionIds: ids, labels: ids, reason: "x" });
+  const lots = () =>
+    Object.fromEntries(Object.values(store.getState().placements).map((p) => [p.slot, p.lot]));
+  const seqOf = (slot: "api" | "frontend") => store.getState().placements[slot]!.seq;
+  decide("name", []);
+  decide("structure", ["single"]);
+  decide("toolchain", ["vite-plus"]);
+  decide("api", []);
+  decide("frontend", ["nextjs"]);
+  decide("ui", ["theme:blue"]);
+  // The sign, the paint and "not needed" take no lot.
+  expect(lots()).toEqual({
+    name: null,
+    structure: 0,
+    toolchain: 1,
+    api: null,
+    frontend: 2,
+    ui: null,
+  });
+  // Not needed → real: the next lot, a fresh seq; nobody else moves.
+  const before = seqOf("frontend");
+  decide("api", ["hono"]);
+  expect(lots()).toEqual({ name: null, structure: 0, toolchain: 1, api: 3, frontend: 2, ui: null });
+  expect(seqOf("api")).toBeGreaterThan(before);
+  // Real → real keeps the lot and the seq.
+  decide("frontend", ["tanstack-start"]);
+  expect(lots().frontend).toBe(2);
+  expect(seqOf("frontend")).toBe(before);
+  // Real → not needed: its block stays (empty), still reserved; nobody else moves.
+  decide("toolchain", []);
+  expect(lots()).toEqual({ name: null, structure: 0, toolchain: 1, api: 3, frontend: 2, ui: null });
+  // ...and it comes back to the same block.
+  decide("toolchain", ["biome-lefthook"]);
+  expect(lots().toolchain).toBe(1);
+  // A new building still gets a block nobody has had.
+  store.decide({ slot: "deploy", optionIds: ["vercel"], labels: ["Vercel"], reason: "x" });
+  expect(store.getState().placements.deploy!.lot).toBe(4);
 });

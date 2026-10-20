@@ -1,7 +1,7 @@
 // In-memory state of one town session. Sits between the MCP tools (agent side)
 // and the HTTP server (page side). No HTTP and no Node imports beyond the global
 // `crypto`, so it can be shared later.
-import { SLOTS, type SlotId } from "./catalog.ts";
+import { SLOTS, takesLot, type SlotId } from "./catalog.ts";
 import type {
   AnswerBody,
   BuildStep,
@@ -40,8 +40,9 @@ export class TownStore {
   private readonly queue: QueuedQuestion[] = [];
   private pendingPlan: PendingPlan | null = null;
   private readonly listeners = new Set<(state: TownState) => void>();
-  /** The seq the next newly placed slot gets. */
+  /** The seq the next newly placed slot gets, and the next block nobody has had. */
   private nextSeq = 0;
+  private nextLot = 0;
 
   constructor(
     projectName: string,
@@ -118,7 +119,7 @@ export class TownStore {
       labels: input.labels,
       auto: true,
       reason: input.reason,
-      seq: this.seqFor(input.slot),
+      ...this.order(input.slot, input.optionIds),
     };
     this.emit();
   }
@@ -207,7 +208,7 @@ export class TownStore {
         optionIds,
         labels,
         auto: false,
-        seq: this.seqFor(question.slot),
+        ...this.order(question.slot, optionIds),
       };
       this.state.placements[question.slot] = placement;
     }
@@ -218,9 +219,16 @@ export class TownStore {
     return "ok";
   }
 
-  /** The slot's seq: kept when it is re-answered, the next one when it is new. */
-  private seqFor(slot: SlotId): number {
-    return this.state.placements[slot]?.seq ?? this.nextSeq++;
+  /** The slot's seq and block for a new answer. A re-answer keeps its seq, unless it
+   * gains a building (a fresh seq). A building gets the block the slot already had, else the
+   * next block nobody has had; a slot keeps its block when it turns "not needed". */
+  private order(slot: SlotId, optionIds: string[]): { seq: number; lot: number | null } {
+    const previous = this.state.placements[slot];
+    const real = takesLot(slot, optionIds);
+    const gained = real && !(previous && takesLot(slot, previous.optionIds));
+    const seq = previous && !gained ? previous.seq : this.nextSeq++;
+    const lot = previous?.lot ?? (real ? this.nextLot++ : null);
+    return { seq, lot };
   }
 
   agentStopped(): void {

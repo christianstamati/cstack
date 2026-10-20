@@ -2,6 +2,7 @@ import { expect, test } from "vite-plus/test";
 
 import { SLOTS, type SlotId } from "../../src/town/catalog.ts";
 import type { Placement } from "../../src/town/protocol.ts";
+import { TownStore } from "../../src/town/store.ts";
 import {
   assignBlocks,
   blockCentre,
@@ -26,30 +27,22 @@ import {
 
 type Placements = Partial<Record<SlotId, Placement>>;
 
-/** The slots in the order given, each with its first option (seq = position). */
-function placed(...slots: SlotId[]): Placements {
-  const placements: Placements = {};
-  slots.forEach((id, seq) => {
-    const slot = SLOTS.find((s) => s.id === id)!;
-    const option = slot.options[0];
-    placements[id] = {
-      slot: id,
-      optionIds: option ? [option.id] : [],
-      labels: [option?.label ?? "shop"],
-      auto: false,
-      seq,
-    };
-  });
-  return placements;
+/** A town where the agent decided these slots in this order, each with its first option
+ * (the ones in `skip` as "not needed"). Built by the real store, so seq and lot are its. */
+function town(slots: SlotId[], skip: SlotId[] = []): TownStore {
+  const store = new TownStore("t");
+  for (const id of slots) decide(store, id, skip.includes(id));
+  return store;
 }
 
-const notNeeded = (slot: SlotId, seq: number): Placement => ({
-  slot,
-  optionIds: [],
-  labels: ["Not needed"],
-  auto: true,
-  seq,
-});
+function decide(store: TownStore, id: SlotId, notNeeded = false, option = 0): void {
+  const slot = SLOTS.find((s) => s.id === id)!;
+  const chosen = slot.options[option];
+  const optionIds = notNeeded || !chosen ? [] : [chosen.id];
+  store.decide({ slot: id, optionIds, labels: [chosen?.label ?? "shop"], reason: "x" });
+}
+
+const placed = (...slots: SlotId[]): Placements => town(slots).getState().placements;
 
 /** Every slot, in the interview's order. */
 const ALL = placed(...SLOTS.map((slot) => slot.id));
@@ -127,8 +120,8 @@ test("buildings take blocks in the order they are placed, from the centre out", 
 });
 
 test("not needed, the name and the paint take no block; nor do they hold one up", () => {
-  const placements = placed("name", "structure", "toolchain", "ui");
-  placements.api = notNeeded("api", 1);
+  const placements = town(["name", "structure", "api", "toolchain", "ui"], ["api"]).getState()
+    .placements;
   const blocks = assignBlocks(placements);
   expect(blocks.api).toBeUndefined();
   expect(blocks.ui).toBeUndefined();
@@ -156,7 +149,7 @@ test("no streets on bare land; the name paves the entrance road only", () => {
   expect(entrance).toHaveLength(1);
   expect(same(entrance[0]!.a, ENTRANCE) || same(entrance[0]!.b, ENTRANCE)).toBe(true);
   // Not-needed answers build nothing either.
-  expect(builtStreets({ api: notNeeded("api", 0) })).toHaveLength(1);
+  expect(builtStreets(town(["api"], ["api"]).getState().placements)).toHaveLength(1);
 });
 
 test("built streets are axis-aligned pieces of street centre-lines", () => {
@@ -198,17 +191,44 @@ test("the streets only grow as answers come in, in any order", () => {
   for (let run = 0; run < 20; run++) {
     const next = random(run + 1);
     const order = SLOTS.map((s) => s.id).sort(() => next() - 0.5);
+    // Every third slot turns out not to be needed.
+    const skip = order.filter((_, i) => i % 3 === 2);
     let before = new Set<string>();
     for (let i = 1; i <= order.length; i++) {
-      const placements = placed(...order.slice(0, i));
-      // Every third slot turns out not to be needed.
-      for (const id of order.slice(0, i))
-        if (order.indexOf(id) % 3 === 2) placements[id] = notNeeded(id, order.indexOf(id));
-      const after = keys(builtStreets(placements));
+      const after = keys(builtStreets(town(order.slice(0, i), skip).getState().placements));
       for (const key of before) expect(after.has(key)).toBe(true);
       before = after;
     }
   }
+});
+
+test("flipping a slot across 'not needed' moves no building and tears down no street", () => {
+  const store = town(["name", "structure", "api", "toolchain", "frontend", "data"], ["api"]);
+  const blocksOf = () => assignBlocks(store.getState().placements);
+  let streets = keys(builtStreets(store.getState().placements));
+  const step = (change: () => void, moving: SlotId[]) => {
+    const before = blocksOf();
+    change();
+    const after = blocksOf();
+    for (const [slot, cell] of Object.entries(before))
+      if (!moving.includes(slot as SlotId)) expect(after[slot as SlotId], slot).toEqual(cell);
+    const now = keys(builtStreets(store.getState().placements));
+    for (const key of streets) expect(now.has(key)).toBe(true);
+    streets = now;
+    return after;
+  };
+  // Not needed → real after later answers: it takes the next free block, at the end.
+  const flipped = step(() => decide(store, "api"), ["api"]);
+  expect(flipped.api).toEqual(SPIRAL[4]);
+  // Real → not needed: its block stays where it was (empty); nobody moves into it.
+  const emptied = step(() => decide(store, "toolchain", true), []);
+  expect(emptied.toolchain).toEqual(SPIRAL[1]);
+  expect(streetRoute("toolchain", "frontend", store.getState().placements)).toEqual([]);
+  // A new building still goes to a block nobody has had.
+  const grown = step(() => decide(store, "deploy"), ["deploy"]);
+  expect(grown.deploy).toEqual(SPIRAL[5]);
+  // And back: the old block again.
+  expect(step(() => decide(store, "toolchain", false, 1), []).toolchain).toEqual(SPIRAL[1]);
 });
 
 test("a route runs along built streets from one kerb to the other", () => {
@@ -251,7 +271,8 @@ test("a route only uses the streets built so far", () => {
   expect(onBuilt(route, keys(builtStreets(placements)))).toBe(true);
   // No route to a block that isn't there.
   expect(streetRoute("frontend", "api", placements)).toEqual([]);
-  expect(streetRoute("frontend", "api", { ...placements, api: notNeeded("api", 3) })).toEqual([]);
+  const skipped = town(["name", "frontend", "deploy", "api"], ["api"]).getState().placements;
+  expect(streetRoute("frontend", "api", skipped)).toEqual([]);
 });
 
 test("cars come once two blocks stand: one per two blocks, six at most", () => {
@@ -261,7 +282,7 @@ test("cars come once two blocks stand: one per two blocks, six at most", () => {
   expect(carCount(placed("name", "frontend", "data"))).toBe(1);
   expect(carCount(placed("frontend", "data", "api"))).toBe(1);
   expect(carCount(placed("frontend", "data", "api", "auth"))).toBe(2);
-  expect(carCount({ ...placed("frontend", "data"), api: notNeeded("api", 2) })).toBe(1);
+  expect(carCount(town(["frontend", "data", "api"], ["api"]).getState().placements)).toBe(1);
   expect(carCount(ALL)).toBe(6);
 });
 

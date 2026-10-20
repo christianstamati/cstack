@@ -1,6 +1,6 @@
 import { expect, test } from "vite-plus/test";
 
-import { SLOTS, type SlotId } from "../../src/town/catalog.ts";
+import { SLOTS, takesLot, type SlotId } from "../../src/town/catalog.ts";
 import type { Placement, Question, TownState } from "../../src/town/protocol.ts";
 import {
   answerOutcome,
@@ -50,6 +50,7 @@ function uiPlacement(settings: Record<string, string>): Placement {
     labels: Object.values(settings),
     auto: true,
     seq: 0,
+    lot: null,
   };
 }
 
@@ -59,8 +60,9 @@ function placement(
   labels: string[],
   auto = false,
   seq = 0,
+  lot = takesLot(slot, optionIds) ? seq : null,
 ): Placement {
-  return { slot, optionIds, labels, auto, seq };
+  return { slot, optionIds, labels, auto, seq, lot };
 }
 
 /** Every slot placed with its first option, in the interview's order. */
@@ -390,7 +392,7 @@ test("the crane waits by the entrance for the name, then on the next free block"
   expect(nextLot(stateAt())).toEqual(NAME_SPOT);
   const placements: TownState["placements"] = { name: placement("name", [], ["shop"], false, 0) };
   expect(nextLot(stateAt({ placements }))).toEqual(blockCentre(SPIRAL[0]!));
-  placements.structure = placement("structure", ["single"], ["Single"], false, 1);
+  placements.structure = placement("structure", ["single"], ["Single"], false, 1, 0);
   // Not needed: no block taken, the crane stays put.
   placements.api = placement("api", [], ["Not needed"], true, 2);
   expect(nextLot(stateAt({ placements }))).toEqual(blockCentre(SPIRAL[1]!));

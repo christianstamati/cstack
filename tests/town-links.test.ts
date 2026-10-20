@@ -15,6 +15,7 @@ function placed(entries: Record<string, string[]>): Placements {
       labels: optionIds.length ? optionIds : ["Not needed"],
       auto: optionIds.length === 0,
       seq,
+      lot: null,
     };
   });
   return placements;

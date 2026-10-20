@@ -180,3 +180,10 @@ export function slotById(id: SlotId): SlotDef {
   if (!slot) throw new Error(`Unknown slot ${id}`);
   return slot;
 }
+
+/** Does an answer with these option ids put a building (or props) on a block of its own?
+ * The name is the entrance sign, the paint has no block, and "not needed" builds nothing. */
+export function takesLot(slot: SlotId, optionIds: readonly string[]): boolean {
+  const kind = slotById(slot).kind;
+  return optionIds.length > 0 && (kind === "building" || kind === "props");
+}
