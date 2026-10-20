@@ -1,9 +1,9 @@
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, test, vi } from "vite-plus/test";
 
-import { runAgent } from "../src/agent.ts";
+import { agentCommandLine, runAgent } from "../src/agent.ts";
 import { defaultOptions } from "./helpers.ts";
 import { runTown } from "../src/town/run.ts";
 
@@ -54,6 +54,47 @@ test("runTown forwards SIGTERM to the agent, ignores SIGINT, and resolves", asyn
     process.emit("SIGTERM");
     // The agent died from the forwarded signal: reported as a failure exit code.
     await expect(running).resolves.toBe(1);
+  } finally {
+    process.env.PATH = oldPath;
+  }
+});
+
+test("the launch prompt comes after `--`, so a variadic flag can't swallow it", () => {
+  // Text mode: no town flags.
+  expect(
+    agentCommandLine({ agentArgs: ["--allowedTools", "Bash(make *)"], prompt: "Read it" }),
+  ).toEqual(["--allowedTools", "Bash(make *)", "--", "Read it"]);
+  expect(
+    agentCommandLine({ launchArgs: ["--sandbox", "x"], model: "o3", agentArgs: [], prompt: "p" }),
+  ).toEqual(["--sandbox", "x", "--model", "o3", "--", "p"]);
+  // The user already ended the options themselves: no second marker.
+  expect(agentCommandLine({ agentArgs: ["--", "extra"], prompt: "p" })).toEqual([
+    "--",
+    "extra",
+    "p",
+  ]);
+});
+
+test("runTown puts the prompt after `--` on the agent's command line", async () => {
+  dir = mkdtempSync(join(tmpdir(), "town-run-"));
+  const bin = join(dir, "codex");
+  const out = join(dir, "args.txt");
+  writeFileSync(bin, `#!/bin/sh\nprintf '%s\\n' "$@" > '${out}'\n`);
+  chmodSync(bin, 0o755);
+  const oldPath = process.env.PATH;
+  process.env.PATH = `${dir}:${oldPath}`;
+  vi.spyOn(console, "log").mockImplementation(() => {});
+  try {
+    const code = await runTown({
+      options: { ...defaultOptions, open: false, agentArgs: ["-i", "a.png"] },
+      projectDir: dir,
+      projectName: "t",
+      agent: { id: "codex", label: "Codex" },
+      launchPrompt: "hi",
+    });
+    expect(code).toBe(0);
+    const args = readFileSync(out, "utf8").trimEnd().split("\n");
+    expect(args.slice(-4)).toEqual(["-i", "a.png", "--", "hi"]);
   } finally {
     process.env.PATH = oldPath;
   }

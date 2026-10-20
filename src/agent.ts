@@ -43,6 +43,28 @@ export async function ask(question: string): Promise<string> {
   }
 }
 
+/**
+ * The agent's arguments: the town's flags, the model, the user's flags (after `--` on our
+ * command line), then the launch prompt after an end-of-options `--`, so a user flag that
+ * takes several values (`--allowedTools`, codex's `--image`) can't swallow the prompt. Both
+ * CLIs take `--` (claude's commander and codex's clap parsers).
+ */
+export function agentCommandLine(input: {
+  readonly launchArgs?: ReadonlyArray<string>;
+  readonly model?: string;
+  readonly agentArgs: ReadonlyArray<string>;
+  readonly prompt: string;
+}): string[] {
+  return [
+    ...(input.launchArgs ?? []),
+    ...(input.model === undefined ? [] : ["--model", input.model]),
+    ...input.agentArgs,
+    // A second `--` would itself become a positional argument.
+    ...(input.agentArgs.includes("--") ? [] : ["--"]),
+    input.prompt,
+  ];
+}
+
 const isWindows = platform() === "win32";
 
 // cmd.exe splits unquoted arguments on spaces; the agent CLIs are `.cmd` shims there.

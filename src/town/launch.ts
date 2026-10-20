@@ -4,8 +4,8 @@
 // Claude Code
 //   --mcp-config <configs...>   JSON string or file; Streamable HTTP server shape is
 //                               { mcpServers: { name: { type: "http", url } } }.
-//                               Variadic: the flag after it must be non-variadic so the
-//                               trailing prompt isn't read as another config.
+//                               Variadic: the prompt goes after `--` (agentCommandLine),
+//                               and the town's last flag is non-variadic as well.
 //   --allowedTools <tools...>   permission rules (`mcp__server__tool`, `Bash(npx *)`);
 //                               passed as ONE comma-separated value (also variadic).
 //   --permission-mode           `acceptEdits` auto-approves file edits; `default` asks.

@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 
-import { AGENTS, ask, pickAgent, runAgent, type Agent } from "./agent.ts";
+import { AGENTS, agentCommandLine, ask, pickAgent, runAgent, type Agent } from "./agent.ts";
 import { isValidProjectName, UsageError, type CliOptions } from "./args.ts";
 import { townUnavailableReason } from "./town/fallback.ts";
 import { describeOs, detectTools, formatTools } from "./machine.ts";
@@ -98,11 +98,11 @@ export async function createProject(options: CliOptions): Promise<number> {
   }
   return runAgent({
     command: agent.id,
-    args: [
-      ...(options.model === undefined ? [] : ["--model", options.model]),
-      ...options.agentArgs,
-      LAUNCH_PROMPT,
-    ],
+    args: agentCommandLine({
+      model: options.model,
+      agentArgs: options.agentArgs,
+      prompt: LAUNCH_PROMPT,
+    }),
     cwd: projectDir,
   });
 }

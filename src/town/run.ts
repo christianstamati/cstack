@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { runAgent, type Agent } from "../agent.ts";
+import { agentCommandLine, runAgent, type Agent } from "../agent.ts";
 import type { CliOptions } from "../args.ts";
 import { townLaunch } from "./launch.ts";
 import { createMcpHandler } from "./mcp.ts";
@@ -86,12 +86,12 @@ export async function runTown(input: {
   try {
     return await runAgent({
       command: input.agent.id,
-      args: [
-        ...launch.args,
-        ...(options.model === undefined ? [] : ["--model", options.model]),
-        ...options.agentArgs,
-        input.launchPrompt,
-      ],
+      args: agentCommandLine({
+        launchArgs: launch.args,
+        model: options.model,
+        agentArgs: options.agentArgs,
+        prompt: input.launchPrompt,
+      }),
       env: launch.env,
       cwd: input.projectDir,
       onSpawn: (spawned) => {
