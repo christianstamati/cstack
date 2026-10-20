@@ -59,6 +59,7 @@ export async function runTown(input: {
   const launch = townLaunch(input.agent.id, {
     mcpUrl: server.mcpUrl,
     askEverything: options.askEverything,
+    agentArgs: options.agentArgs,
   });
 
   console.log(`Your town: ${server.url}`);

@@ -19,9 +19,13 @@
 //   mcp_servers.<name>.tool_timeout_sec   seconds per tool call (default 300).
 //   --sandbox workspace-write   write inside the project only.
 //   -c sandbox_workspace_write.network_access=true   lets installs reach the network.
-//   --ask-for-approval on-request | untrusted   (`untrusted` asks for all but known-safe).
+//   --sandbox read-only         with on-request: asks before edits, network and writes.
+//   --ask-for-approval on-request   (0.160 accepts only on-request and never; `untrusted`
+//                               is gone, from the flag and from config).
+//   Both flags error when given twice ("cannot be used multiple times"), so when the
+//   user passes their own after `--`, the town leaves its one out.
 //
-// Neither agent's skip-all-permissions mode is ever used.
+// Neither agent's skip-all-permissions mode is ever used by the town.
 import type { AgentId } from "../args.ts";
 
 export const ALLOWED_COMMANDS = [
@@ -55,14 +59,36 @@ export interface TownLaunch {
 
 const PACKAGES_WARNING = "npx and bunx let the agent download and run npm packages without asking.";
 
-export function townLaunch(
-  agent: AgentId,
-  input: { mcpUrl: string; askEverything: boolean },
-): TownLaunch {
+const OVERRIDE_NOTE =
+  "You passed permission flags after --, and your flags override the town's permission defaults.";
+
+type LaunchInput = {
+  mcpUrl: string;
+  askEverything: boolean;
+  /** What the user passed after `--`; they go on the agent's command line after the town's. */
+  agentArgs?: ReadonlyArray<string>;
+};
+
+export function townLaunch(agent: AgentId, input: LaunchInput): TownLaunch {
   return agent === "claude" ? claudeLaunch(input) : codexLaunch(input);
 }
 
-function claudeLaunch(input: { mcpUrl: string; askEverything: boolean }): TownLaunch {
+/** True when `args` (before any `--`) set one of the long flags `long` (also `--flag=value`)
+ * or the short flags `short` (also `-xvalue`). */
+function setsFlag(
+  args: ReadonlyArray<string>,
+  long: ReadonlyArray<string>,
+  short: ReadonlyArray<string> = [],
+): boolean {
+  for (const arg of args) {
+    if (arg === "--") return false;
+    if (long.some((flag) => arg === flag || arg.startsWith(`${flag}=`))) return true;
+    if (!arg.startsWith("--") && short.some((flag) => arg.startsWith(flag))) return true;
+  }
+  return false;
+}
+
+function claudeLaunch(input: LaunchInput): TownLaunch {
   const mcpConfig = JSON.stringify({
     mcpServers: { cstack: { type: "http", url: input.mcpUrl } },
   });
@@ -87,40 +113,53 @@ function claudeLaunch(input: { mcpUrl: string; askEverything: boolean }): TownLa
     env: { MCP_TOOL_TIMEOUT: String(TOOL_TIMEOUT_MS) },
     allowed,
     runsPackages: !input.askEverything,
-    summary: input.askEverything
-      ? ["The agent will ask before every command and file edit."]
-      : [
-          `Allowed without asking in this session: ${allowed.join(", ")}. They run with whatever arguments the agent picks.`,
-          "File edits in the project are accepted automatically, and so are basic file commands like mkdir, mv and cp in the project (Claude's accept-edits mode). Anything else asks in this terminal.",
-          PACKAGES_WARNING,
-        ],
+    summary: [
+      ...(input.askEverything
+        ? ["The agent will ask before every command and file edit."]
+        : [
+            `Allowed without asking in this session: ${allowed.join(", ")}. They run with whatever arguments the agent picks.`,
+            "File edits in the project are accepted automatically, and so are basic file commands like mkdir, mv and cp in the project (Claude's accept-edits mode). Anything else asks in this terminal.",
+            PACKAGES_WARNING,
+          ]),
+      // Claude takes the last --permission-mode, so the user's (after the town's) wins.
+      ...(setsFlag(input.agentArgs ?? [], ["--permission-mode", "--dangerously-skip-permissions"])
+        ? [OVERRIDE_NOTE]
+        : []),
+    ],
   };
 }
 
-function codexLaunch(input: { mcpUrl: string; askEverything: boolean }): TownLaunch {
+function codexLaunch(input: LaunchInput): TownLaunch {
+  const own = input.agentArgs ?? [];
+  const bypass = setsFlag(own, ["--full-auto", "--dangerously-bypass-approvals-and-sandbox"]);
+  const ownSandbox = bypass || setsFlag(own, ["--sandbox"], ["-s"]);
+  const ownApproval = bypass || setsFlag(own, ["--ask-for-approval"], ["-a"]);
+  const args = [
+    "-c",
+    `mcp_servers.cstack.url=${JSON.stringify(input.mcpUrl)}`,
+    "-c",
+    `mcp_servers.cstack.tool_timeout_sec=${TOOL_TIMEOUT_MS / 1000}`,
+  ];
+  if (!ownSandbox) {
+    if (!input.askEverything) args.push("-c", "sandbox_workspace_write.network_access=true");
+    args.push("--sandbox", input.askEverything ? "read-only" : "workspace-write");
+  }
+  if (!ownApproval) args.push("--ask-for-approval", "on-request");
   return {
-    args: [
-      "-c",
-      `mcp_servers.cstack.url=${JSON.stringify(input.mcpUrl)}`,
-      "-c",
-      `mcp_servers.cstack.tool_timeout_sec=${TOOL_TIMEOUT_MS / 1000}`,
-      "-c",
-      "sandbox_workspace_write.network_access=true",
-      "--sandbox",
-      "workspace-write",
-      "--ask-for-approval",
-      input.askEverything ? "untrusted" : "on-request",
-    ],
+    args,
     env: {},
     allowed: [],
     runsPackages: !input.askEverything,
-    summary: input.askEverything
-      ? [
-          "Codex will ask before running commands, except known-safe read-only ones. File edits in the project folder are still accepted automatically.",
-        ]
-      : [
-          "Codex can run any command without asking, with file writes limited to the project folder and network access allowed. Anything outside that asks in this terminal.",
-          PACKAGES_WARNING,
-        ],
+    summary:
+      ownSandbox || ownApproval
+        ? [OVERRIDE_NOTE]
+        : input.askEverything
+          ? [
+              "Codex runs in a read-only sandbox and asks before it edits files, uses the network or runs anything that needs more than reading.",
+            ]
+          : [
+              "Codex can run any command without asking, with file writes limited to the project folder and network access allowed. Anything outside that asks in this terminal.",
+              PACKAGES_WARNING,
+            ],
   };
 }
