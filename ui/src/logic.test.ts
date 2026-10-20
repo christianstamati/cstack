@@ -12,6 +12,7 @@ import { TownStore } from "../../src/town/store.ts";
 import {
   answerOutcome,
   BASE_COLORS,
+  BUILD_SIGN_AFTER_MS,
   billboardCard,
   buildNote,
   craneSpot,
@@ -42,6 +43,7 @@ import {
   signSpots,
   stageFor,
   TERMINAL_SIGN_AFTER_MS,
+  terminalSignText,
   THEME_COLORS,
   themeFor,
   tokenFrom,
@@ -390,9 +392,19 @@ test("no terminal sign while the plan waits, after the end, or once the agent st
   expect(showTerminalSign(stateAt({ phase: "plan", plan: PLAN }), 99_999)).toBe(false);
   expect(showTerminalSign(stateAt({ phase: "done" }), 99_999)).toBe(false);
   expect(showTerminalSign(stateAt({ agentStopped: true }), 99_999)).toBe(false);
-  // A long build step with no news: the agent may be waiting on a permission prompt.
-  expect(showTerminalSign(stateAt({ phase: "build", plan: PLAN }), 99_999)).toBe(true);
   expect(showTerminalSign(stateAt({ lastAgentActivity: 50_000 }), 60_000)).toBe(false);
+});
+
+test("during the build the sign waits longer and only suggests a look at the terminal", () => {
+  const build = stateAt({ phase: "build", plan: PLAN, lastAgentActivity: 0 });
+  // An install can be quiet for a minute or two without anything being wrong.
+  expect(BUILD_SIGN_AFTER_MS).toBe(120_000);
+  expect(showTerminalSign(build, 99_999)).toBe(false);
+  expect(terminalSignText(build, 99_999)).toBeNull();
+  expect(showTerminalSign(build, 120_001)).toBe(true);
+  expect(terminalSignText(build, 120_001)).toBe("Taking a while? Check your terminal.");
+  // The interview keeps the 30 s and the firm wording.
+  expect(terminalSignText(stateAt(), 30_001)).toBe("The agent needs you in the terminal");
 });
 
 test("after the agent gives up on the plan, the page waits on it again", async () => {

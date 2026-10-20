@@ -478,20 +478,29 @@ export function hoverText(placement: Placement): { title: string; detail: string
  * page says it is probably waiting in the terminal (e.g. on a permission prompt). */
 export const TERMINAL_SIGN_AFTER_MS = 30_000;
 
+/** The same during the build, where an install or a generator can be quiet for a while. */
+export const BUILD_SIGN_AFTER_MS = 120_000;
+
 /** The plan is on the billboard, waiting for Build it or Change something. */
 export function isPlanWaiting(state: TownState): boolean {
   return state.phase === "plan" && state.plan !== null;
 }
 
-/** True when the agent has gone quiet with nothing to answer on the page. */
+/** What the terminal sign says, or null while it stays away: the agent has gone quiet
+ * with nothing to answer on the page. During the build it waits longer and only suggests a
+ * look, since a long step is usually just slow. */
+export function terminalSignText(state: TownState, now: number): string | null {
+  if (state.pending !== null || isPlanWaiting(state)) return null;
+  if (state.phase === "done" || state.agentStopped) return null;
+  const build = state.phase === "build";
+  const after = build ? BUILD_SIGN_AFTER_MS : TERMINAL_SIGN_AFTER_MS;
+  if (now - state.lastAgentActivity <= after) return null;
+  return build ? "Taking a while? Check your terminal." : "The agent needs you in the terminal";
+}
+
+/** True when the terminal sign is up. */
 export function showTerminalSign(state: TownState, now: number): boolean {
-  return (
-    state.pending === null &&
-    !isPlanWaiting(state) &&
-    state.phase !== "done" &&
-    !state.agentStopped &&
-    now - state.lastAgentActivity > TERMINAL_SIGN_AFTER_MS
-  );
+  return terminalSignText(state, now) !== null;
 }
 
 /** The agent is working out the next interview question: the crane swings. */

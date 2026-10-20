@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 import type { TownState } from "../../../src/town/protocol.ts";
-import { showTerminalSign } from "../logic.ts";
+import { terminalSignText } from "../logic.ts";
 
 /** The current time, updated every `ms`. */
 function useNow(ms: number): number {
@@ -17,7 +17,8 @@ function useNow(ms: number): number {
 
 export function TerminalSign({ state }: { state: TownState }) {
   const now = useNow(1000);
-  if (!showTerminalSign(state, now)) return null;
+  const text = terminalSignText(state, now);
+  if (text === null) return null;
   return (
     <div className="terminal-sign" role="status">
       <span className="terminal-board">
@@ -39,7 +40,7 @@ export function TerminalSign({ state }: { state: TownState }) {
             strokeLinejoin="round"
           />
         </svg>
-        The agent needs you in the terminal
+        {text}
       </span>
     </div>
   );
