@@ -822,3 +822,25 @@ body,
     animation: none;
   }
 }
+
+/* In place of the canvas when the 3D scene fails: a flat pastel backdrop and a note. */
+.scene-fallback {
+  position: fixed;
+  inset: 0;
+  background: #dfe3f4;
+}
+
+.scene-fallback-note {
+  position: absolute;
+  top: 64px;
+  left: 50%;
+  translate: -50% 0;
+  max-width: calc(100% - 32px);
+  margin: 0;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: var(--glass);
+  border: 1px solid var(--glass-edge);
+  font-size: 14px;
+  text-align: center;
+}

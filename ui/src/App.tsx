@@ -5,6 +5,7 @@ import { Billboard } from "./hud/Billboard.tsx";
 import { Credits } from "./hud/Credits.tsx";
 import { Entry } from "./hud/Entry.tsx";
 import { Mute } from "./hud/Mute.tsx";
+import { SceneBoundary } from "./hud/SceneBoundary.tsx";
 import { TerminalSign } from "./hud/TerminalSign.tsx";
 import { Camera, CAMERA_START } from "./scene/Camera.tsx";
 import { Clouds } from "./scene/Clouds.tsx";
@@ -41,35 +42,38 @@ export function App() {
   return (
     <>
       <SkyBackdrop />
-      <Canvas
-        className="town"
-        shadows="percentage"
-        dpr={[1, 2]}
-        orthographic
-        gl={{ alpha: true }}
-        camera={{ position: CAMERA_START, zoom: 20, near: 1, far: 300 }}
-      >
-        <Sky />
-        <Clouds />
-        <Ground />
-        {town.state ? (
-          <>
-            {/* Streets first: they say when each street is paved, for the cars and links. */}
-            <Streets state={town.state} />
-            <Blocks state={town.state} />
-            <Placements state={town.state} />
-            <Links state={town.state} />
-            <Traffic state={town.state} />
-            <SurveyPlot state={town.state} />
-            <Preview state={town.state} />
-            <Crane state={town.state} />
-            <Signs state={town.state} />
-            <LightsUp state={town.state} entered={entered} />
-          </>
-        ) : null}
-        <Camera state={town.state} />
-        <HoverTracker />
-      </Canvas>
+      {/* Only the scene goes inside: everything to answer with stays up if it fails. */}
+      <SceneBoundary>
+        <Canvas
+          className="town"
+          shadows="percentage"
+          dpr={[1, 2]}
+          orthographic
+          gl={{ alpha: true }}
+          camera={{ position: CAMERA_START, zoom: 20, near: 1, far: 300 }}
+        >
+          <Sky />
+          <Clouds />
+          <Ground />
+          {town.state ? (
+            <>
+              {/* Streets first: they say when each street is paved, for the cars and links. */}
+              <Streets state={town.state} />
+              <Blocks state={town.state} />
+              <Placements state={town.state} />
+              <Links state={town.state} />
+              <Traffic state={town.state} />
+              <SurveyPlot state={town.state} />
+              <Preview state={town.state} />
+              <Crane state={town.state} />
+              <Signs state={town.state} />
+              <LightsUp state={town.state} entered={entered} />
+            </>
+          ) : null}
+          <Camera state={town.state} />
+          <HoverTracker />
+        </Canvas>
+      </SceneBoundary>
       <HoverLabel />
       {town.state ? (
         <>
