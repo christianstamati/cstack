@@ -515,16 +515,18 @@ export function nextLot(state: TownState): Point | null {
   return open(["paint"]) ? FOUNTAIN_SPOT : null;
 }
 
-/** Which card the billboard shows. The plan comes before any question; the plan and
+/** Which card the billboard shows. The plan comes before any question, and a question
+ * before the report (one asked after it would otherwise never be seen); the plan and
  * report cards come with the build progress. */
 export type BillboardCard = "question" | "plan" | "report";
 
 export function billboardCard(state: TownState): BillboardCard | null {
+  if (!state.agentStopped) {
+    if (isPlanWaiting(state)) return "plan";
+    if (state.pending) return "question";
+  }
   // The report stays up after the user quits the agent.
   if (state.phase === "done" && state.report) return "report";
-  if (state.agentStopped) return null;
-  if (isPlanWaiting(state)) return "plan";
-  if (state.pending) return "question";
   return null;
 }
 

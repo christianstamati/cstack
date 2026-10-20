@@ -459,6 +459,14 @@ test("the billboard shows the plan over a question, the question otherwise", () 
   expect(billboardCard(stateAt({ phase: "done", report, agentStopped: true }))).toBe("report");
 });
 
+test("a question asked after the report shows over it; the report comes back once answered", () => {
+  const report = { built: [], commands: [], manualSteps: [], unverified: [] };
+  const done = stateAt({ phase: "done", report, lastAgentActivity: 0 });
+  expect(billboardCard({ ...done, pending: question() })).toBe("question");
+  expect(billboardCard(done)).toBe("report");
+  expect(showTerminalSign({ ...done, pending: question() }, 99_999)).toBe(false);
+});
+
 test("the crane stands on the back of its block, off the lot, its hook over the lot", () => {
   const hookOver = ([lx, lz]: Point) => {
     const { x, z, yaw, reach } = craneSpot([lx, lz]);

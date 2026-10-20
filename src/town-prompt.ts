@@ -63,4 +63,8 @@ answer drops a building into it. The \`cstack\` MCP server gives you the tools t
 
 7. **Narrate.** Call \`status\` with one short line before any work that takes more than
    a few seconds.
+
+8. **Stop after the report.** Once you have called \`report\`, the town is finished. Don't
+   call \`ask\` or any other \`cstack\` tool after it. Rule 1 ends there: any follow-up
+   conversation happens in the terminal.
 `;
