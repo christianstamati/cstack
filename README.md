@@ -79,9 +79,12 @@ skip-all-permissions mode.
   folder and network access allowed. Anything outside that asks in your terminal.
 - `npx`, `bunx`, `pnpm dlx` and `yarn dlx` can download and run any npm package without
   asking. Check what the agent is about to install if that matters to you.
-- `--ask-everything` keeps the prompts: Claude Code asks before every command and edit,
-  and Codex asks before everything except known-safe read-only commands. File edits in the
-  project folder are still accepted automatically.
+- `--ask-everything` keeps the prompts. Claude Code runs in its default mode and asks
+  before every command and file edit. Codex runs in a read-only sandbox and asks before it
+  edits files, uses the network or runs anything that needs more than reading.
+- Permission flags you pass after `--` override the town's defaults. For Codex
+  (`--sandbox`, `--ask-for-approval`, `--dangerously-bypass-approvals-and-sandbox`) the
+  town then leaves its own flag out, since Codex refuses one given twice.
 
 ### When the text interview is used instead
 
