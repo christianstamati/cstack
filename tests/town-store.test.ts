@@ -280,6 +280,30 @@ test("an aborted plan is withdrawn", async () => {
   expect(store.answer({ questionId: "plan", action: "build" })).toBe("stale");
 });
 
+test("an aborted plan leaves the plan phase and tells the page", async () => {
+  let now = 1_000;
+  const store = new TownStore("my-app", () => now);
+  const seen: string[] = [];
+  store.subscribe((state) => seen.push(`${state.phase}:${state.plan === null ? "none" : "plan"}`));
+  const controller = new AbortController();
+  const result = expect(store.showPlan(plan, controller.signal)).rejects.toThrow("cancelled");
+  expect(store.getState()).toMatchObject({ phase: "plan", plan });
+  now = 5_000;
+  controller.abort();
+  await result;
+  // Back to waiting on the agent: no plan card nobody can answer.
+  expect(store.getState()).toMatchObject({ phase: "interview", plan: null });
+  expect(seen.at(-1)).toBe("interview:none");
+  // The agent's silence starts with the abort.
+  expect(store.getState().lastAgentActivity).toBe(5_000);
+});
+
+test("an already aborted plan changes nothing", async () => {
+  const store = new TownStore("my-app");
+  await expect(store.showPlan(plan, AbortSignal.abort())).rejects.toThrow("cancelled");
+  expect(store.getState()).toMatchObject({ phase: "interview", plan: null });
+});
+
 test("a question that cannot be answered is refused", () => {
   const store = new TownStore("my-app");
   expect(() => store.ask({ ...frontendQ, options: [] })).toThrow("options");

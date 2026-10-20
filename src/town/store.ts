@@ -130,11 +130,11 @@ export class TownStore {
       this.emit();
       return Promise.reject(new AgentStoppedError());
     }
+    if (signal?.aborted) return Promise.reject(new Error("The plan was cancelled."));
     // A newer plan supersedes an unanswered one.
     this.pendingPlan?.reject(new Error("The plan was replaced by a newer one."));
     this.state.plan = plan;
     this.state.phase = "plan";
-    if (signal?.aborted) return Promise.reject(new Error("The plan was cancelled."));
     return new Promise<PlanResult>((resolve, reject) => {
       const entry: PendingPlan = { resolve, reject };
       this.pendingPlan = entry;
@@ -143,7 +143,13 @@ export class TownStore {
         () => {
           if (this.pendingPlan !== entry) return;
           this.pendingPlan = null;
+          // Nobody can answer the plan any more: take it down, so the page waits on the
+          // agent again (and points to the terminal if it stays quiet).
+          this.state.plan = null;
+          this.state.phase = "interview";
+          this.touch();
           reject(new Error("The plan was cancelled."));
+          this.emit();
         },
         { once: true },
       );

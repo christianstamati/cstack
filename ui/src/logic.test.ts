@@ -8,6 +8,7 @@ import type {
   ReportView,
   TownState,
 } from "../../src/town/protocol.ts";
+import { TownStore } from "../../src/town/store.ts";
 import {
   answerOutcome,
   BASE_COLORS,
@@ -392,6 +393,23 @@ test("no terminal sign while the plan waits, after the end, or once the agent st
   // A long build step with no news: the agent may be waiting on a permission prompt.
   expect(showTerminalSign(stateAt({ phase: "build", plan: PLAN }), 99_999)).toBe(true);
   expect(showTerminalSign(stateAt({ lastAgentActivity: 50_000 }), 60_000)).toBe(false);
+});
+
+test("after the agent gives up on the plan, the page waits on it again", async () => {
+  let now = 0;
+  const store = new TownStore("my-app", () => now);
+  const controller = new AbortController();
+  const shown = store.showPlan(PLAN, controller.signal).catch(() => {});
+  expect(billboardCard(store.getState())).toBe("plan");
+  now = 10_000;
+  controller.abort();
+  await shown;
+  const state = store.getState();
+  // No dead plan card: the crane thinks, and the terminal sign comes if it stays quiet.
+  expect(billboardCard(state)).toBeNull();
+  expect(isPlanWaiting(state)).toBe(false);
+  expect(isThinking(state)).toBe(true);
+  expect(showTerminalSign(state, 10_000 + TERMINAL_SIGN_AFTER_MS + 1)).toBe(true);
 });
 
 test("the plan waits only in the plan phase with a plan set", () => {
