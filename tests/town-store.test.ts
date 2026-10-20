@@ -280,6 +280,17 @@ test("an aborted plan is withdrawn", async () => {
   expect(store.answer({ questionId: "plan", action: "build" })).toBe("stale");
 });
 
+test("every plan gets its own id, so the page can tell a new plan from the old one", async () => {
+  const store = new TownStore("my-app");
+  expect(store.getState().planId).toBeNull();
+  const first = store.showPlan(plan).catch(() => "replaced");
+  const firstId = store.getState().planId;
+  expect(firstId).toEqual(expect.any(String));
+  void store.showPlan(plan);
+  await expect(first).resolves.toBe("replaced");
+  expect(store.getState().planId).not.toBe(firstId);
+});
+
 test("an aborted plan leaves the plan phase and tells the page", async () => {
   let now = 1_000;
   const store = new TownStore("my-app", () => now);
@@ -292,7 +303,7 @@ test("an aborted plan leaves the plan phase and tells the page", async () => {
   controller.abort();
   await result;
   // Back to waiting on the agent: no plan card nobody can answer.
-  expect(store.getState()).toMatchObject({ phase: "interview", plan: null });
+  expect(store.getState()).toMatchObject({ phase: "interview", plan: null, planId: null });
   expect(seen.at(-1)).toBe("interview:none");
   // The agent's silence starts with the abort.
   expect(store.getState().lastAgentActivity).toBe(5_000);

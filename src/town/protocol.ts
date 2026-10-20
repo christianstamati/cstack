@@ -65,6 +65,8 @@ export interface TownState {
   placements: Partial<Record<SlotId, Placement>>;
   pending: Question | null;
   plan: PlanView | null;
+  /** Set afresh for every plan shown (null with no plan), so the page can tell them apart. */
+  planId: string | null;
   steps: BuildStep[];
   report: ReportView | null;
   status: string | null;

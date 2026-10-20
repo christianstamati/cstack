@@ -54,6 +54,7 @@ export class TownStore {
       placements: {},
       pending: null,
       plan: null,
+      planId: null,
       steps: [],
       report: null,
       status: null,
@@ -134,6 +135,7 @@ export class TownStore {
     // A newer plan supersedes an unanswered one.
     this.pendingPlan?.reject(new Error("The plan was replaced by a newer one."));
     this.state.plan = plan;
+    this.state.planId = crypto.randomUUID();
     this.state.phase = "plan";
     return new Promise<PlanResult>((resolve, reject) => {
       const entry: PendingPlan = { resolve, reject };
@@ -146,6 +148,7 @@ export class TownStore {
           // Nobody can answer the plan any more: take it down, so the page waits on the
           // agent again (and points to the terminal if it stays quiet).
           this.state.plan = null;
+          this.state.planId = null;
           this.state.phase = "interview";
           this.touch();
           reject(new Error("The plan was cancelled."));

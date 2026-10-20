@@ -355,6 +355,7 @@ function stateAt(overrides: Partial<TownState> = {}): TownState {
     placements: {},
     pending: null,
     plan: null,
+    planId: null,
     steps: [],
     report: null,
     status: null,

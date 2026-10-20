@@ -17,7 +17,10 @@ type Props = {
   takeFocus: boolean;
 };
 
-function cardFor(card: BillboardCard | null, { state, postAnswer, takeFocus }: Props): ReactNode {
+export function cardFor(
+  card: BillboardCard | null,
+  { state, postAnswer, takeFocus }: Props,
+): ReactNode {
   switch (card) {
     case "question":
       // Keyed by question, so a new question starts with nothing ticked or typed.
@@ -30,8 +33,10 @@ function cardFor(card: BillboardCard | null, { state, postAnswer, takeFocus }: P
         />
       );
     case "plan":
+      // Keyed by plan, so a new plan starts with nothing in flight (busy, picking, a problem).
       return (
         <PlanCard
+          key={state.planId ?? "plan"}
           plan={state.plan!}
           placements={state.placements}
           postAnswer={postAnswer}
