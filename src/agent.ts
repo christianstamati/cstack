@@ -54,11 +54,13 @@ export function runAgent(input: {
   readonly command: string;
   readonly args: ReadonlyArray<string>;
   readonly cwd: string;
+  readonly env?: Readonly<Record<string, string>>;
 }): Promise<number> {
   return new Promise((resolve, reject) => {
     const args = isWindows ? input.args.map(quoteForCmd) : [...input.args];
     const child = spawn(input.command, args, {
       cwd: input.cwd,
+      env: { ...process.env, ...input.env },
       stdio: "inherit",
       shell: isWindows,
     });

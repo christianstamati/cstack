@@ -3,6 +3,7 @@ import { basename, dirname, join, resolve } from "node:path";
 
 import { AGENTS, ask, pickAgent, runAgent, type Agent } from "./agent.ts";
 import { isValidProjectName, UsageError, type CliOptions } from "./args.ts";
+import { townUnavailableReason } from "./town/fallback.ts";
 import { describeOs, detectTools, formatTools } from "./machine.ts";
 import {
   BOOTSTRAP_PATH,
@@ -40,18 +41,36 @@ export async function createProject(options: CliOptions): Promise<number> {
   const installed = AGENTS.filter((agent) => tools[agent.id] !== null);
   const agent = await chooseAgent(options, installed, interactive);
 
+  let town = false;
+  if (agent !== undefined && !options.terminal) {
+    const reason = townUnavailableReason({
+      stdinTTY: process.stdin.isTTY === true,
+      stdoutTTY: process.stdout.isTTY === true,
+      env: process.env,
+      open: options.open,
+    });
+    if (reason === null) {
+      town = true;
+    } else {
+      console.log(`Using the text interview: ${reason}.`);
+    }
+  }
+
   mkdirSync(join(projectDir, ".cstack"), { recursive: true });
   const promptPath = join(projectDir, BOOTSTRAP_PATH);
   writeFileSync(
     promptPath,
-    fillBootstrapPrompt({
-      projectDir,
-      projectName,
-      agent: agent?.label ?? "unknown (pasted by hand)",
-      os: describeOs(),
-      nodeVersion: tools.node ?? "not installed",
-      tools: formatTools(tools),
-    }),
+    fillBootstrapPrompt(
+      {
+        projectDir,
+        projectName,
+        agent: agent?.label ?? "unknown (pasted by hand)",
+        os: describeOs(),
+        nodeVersion: tools.node ?? "not installed",
+        tools: formatTools(tools),
+      },
+      { town },
+    ),
   );
   if (presetConfig !== undefined) {
     writeFileSync(join(projectDir, CONFIG_PATH), `${JSON.stringify(presetConfig, null, 2)}\n`);
@@ -72,6 +91,11 @@ export async function createProject(options: CliOptions): Promise<number> {
   }
 
   console.log(`Created ${projectDir}. Starting ${agent.label}…\n`);
+  if (town) {
+    // Loaded on demand so the text interview never pays for the server and MCP SDK.
+    const { runTown } = await import("./town/run.ts");
+    return runTown({ options, projectDir, projectName, agent, launchPrompt: LAUNCH_PROMPT });
+  }
   return runAgent({
     command: agent.id,
     args: [
