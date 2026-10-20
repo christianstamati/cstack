@@ -44,7 +44,7 @@ export const ALLOWED_COMMANDS = [
 
 const MCP_TOOLS = ["ask", "decide", "plan", "progress", "report", "status"];
 const TOOL_TIMEOUT_MS = 24 * 60 * 60 * 1000;
-const DOWNLOADS_PACKAGES = new Set(["npx", "bunx"]);
+const DOWNLOADS_PACKAGES = new Set(["npx", "bunx", "pnpm dlx", "yarn dlx"]);
 
 export interface TownLaunch {
   args: string[];
@@ -57,7 +57,8 @@ export interface TownLaunch {
   summary: string[];
 }
 
-const PACKAGES_WARNING = "npx and bunx let the agent download and run npm packages without asking.";
+const PACKAGES_WARNING =
+  "npx, bunx, pnpm dlx and yarn dlx let the agent download and run npm packages without asking.";
 
 const OVERRIDE_NOTE =
   "You passed permission flags after --, and your flags override the town's permission defaults.";
@@ -117,7 +118,7 @@ function claudeLaunch(input: LaunchInput): TownLaunch {
       ...(input.askEverything
         ? ["The agent will ask before every command and file edit."]
         : [
-            `Allowed without asking in this session: ${allowed.join(", ")}. They run with whatever arguments the agent picks.`,
+            `Allowed without asking in this session: ${allowed.join(", ")}. They run with whatever arguments the agent picks, so they can run arbitrary code (bun -e, npm exec, git hooks and config, docker compose run).`,
             "File edits in the project are accepted automatically, and so are basic file commands like mkdir, mv and cp in the project (Claude's accept-edits mode). Anything else asks in this terminal.",
             PACKAGES_WARNING,
           ]),

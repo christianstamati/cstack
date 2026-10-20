@@ -84,6 +84,13 @@ test("claude's startup summary names the tools and warns about packages", () => 
   expect(text).toContain("mkdir, mv and cp");
   expect(text).toContain("download and run npm packages");
   expect(text).not.toMatch(/commands in(side)? the project/);
+  // Every download-and-run command is flagged, and the summary says plainly what that means.
+  for (const command of ["npx", "bunx", "pnpm dlx", "yarn dlx"]) {
+    expect(launch.allowed).toContain(`${command} (runs any npm package)`);
+    expect(text).toContain(command);
+  }
+  expect(text).toContain("can run arbitrary code");
+  expect(text).toContain("bun -e");
 });
 
 test("codex warns about packages and describes its policy plainly", () => {

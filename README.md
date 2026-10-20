@@ -72,12 +72,13 @@ skip-all-permissions mode.
 - **Claude Code** runs in accept-edits mode, so file edits in the project (and basic
   file commands like mkdir, mv and cp) are accepted. It also gets an allowlist of
   `npm`, `pnpm`, `yarn`, `bun`, `npx`, `bunx`, `pnpm dlx`, `yarn dlx`, `git`, `vp` and
-  `docker compose`. Those run with whatever arguments the agent picks. Anything else
-  asks in your terminal.
+  `docker compose`. Those run with whatever arguments the agent picks, so they can run
+  arbitrary code (`bun -e`, `npm exec`, git hooks and config, `docker compose run`).
+  Anything else asks in your terminal.
 - **Codex** can run any command without asking, with file writes limited to the project
   folder and network access allowed. Anything outside that asks in your terminal.
-- `npx` and `bunx` can download and run any npm package without asking. Check what the
-  agent is about to install if that matters to you.
+- `npx`, `bunx`, `pnpm dlx` and `yarn dlx` can download and run any npm package without
+  asking. Check what the agent is about to install if that matters to you.
 - `--ask-everything` keeps the prompts: Claude Code asks before every command and edit,
   and Codex asks before everything except known-safe read-only commands. File edits in the
   project folder are still accepted automatically.
