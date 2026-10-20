@@ -1,7 +1,7 @@
 // One question on the billboard. A single choice answers on click; a multi-select ticks
 // options and sends them with Done; free text takes a typed answer and OK (any options
 // shown with it are ticked, not sent on click). Hovering an option previews its building.
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { slotById } from "../../../src/town/catalog.ts";
 import type { Question } from "../../../src/town/protocol.ts";
@@ -10,8 +10,18 @@ import type { Town } from "../use-town.ts";
 
 type Outcome = Awaited<ReturnType<Town["postAnswer"]>> | "offline";
 
-export function QuestionCard(props: { question: Question; postAnswer: Town["postAnswer"] }) {
-  const { question, postAnswer } = props;
+/** The first thing to answer with: the text input, else the first option. */
+function firstControl(card: HTMLElement | null): HTMLElement | null {
+  return card?.querySelector<HTMLElement>(".question-input, .option") ?? null;
+}
+
+export function QuestionCard(props: {
+  question: Question;
+  postAnswer: Town["postAnswer"];
+  /** Focus the card's first control when it appears (or once this turns true). */
+  takeFocus: boolean;
+}) {
+  const { question, postAnswer, takeFocus } = props;
   const { slot, options, multiSelect, freeText } = question;
   /** Options are ticked rather than sent on click. */
   const ticking = multiSelect || freeText;
@@ -22,6 +32,22 @@ export function QuestionCard(props: { question: Question; postAnswer: Town["post
   const [shaking, setShaking] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const inputId = useId();
+  const card = useRef<HTMLElement>(null);
+  /** Where focus was when an answer went out; it returns there if the answer bounces. */
+  const returnFocus = useRef<HTMLElement | null>(null);
+  const [bounced, setBounced] = useState(0);
+
+  useEffect(() => {
+    if (takeFocus) firstControl(card.current)?.focus({ preventScroll: true });
+  }, [takeFocus]);
+  // After a bounce the controls are enabled again (they were disabled while sending).
+  useEffect(() => {
+    if (bounced === 0) return;
+    const back = returnFocus.current;
+    const target =
+      back?.isConnected && card.current?.contains(back) ? back : firstControl(card.current);
+    target?.focus({ preventScroll: true });
+  }, [bounced]);
 
   // What would be built: the ticked options plus the hovered one, in the question's order.
   // Nothing while an answer is on its way: its real building is about to drop.
@@ -38,6 +64,8 @@ export function QuestionCard(props: { question: Question; postAnswer: Town["post
 
   const send = async (optionIds: string[], typed?: string) => {
     if (busy) return;
+    returnFocus.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setBusy(true);
     setProblem(null);
     const body =
@@ -56,6 +84,7 @@ export function QuestionCard(props: { question: Question; postAnswer: Town["post
     // Stale: the hook re-syncs and this card is replaced by whatever is current.
     if (outcome === "stale") return;
     setShaking(true);
+    setBounced((n) => n + 1);
     if (outcome === "offline") setProblem("Can't reach the town. Is the terminal still running?");
     else setProblem("That answer didn't fit. Try again?");
   };
@@ -86,6 +115,7 @@ export function QuestionCard(props: { question: Question; postAnswer: Town["post
 
   return (
     <section
+      ref={card}
       className={shaking ? "question shake" : "question"}
       aria-busy={busy}
       onAnimationEnd={() => setShaking(false)}
@@ -110,7 +140,10 @@ export function QuestionCard(props: { question: Question; postAnswer: Town["post
                   onClick={() => pick(option.id)}
                   onPointerEnter={() => setHovered(option.id)}
                   onPointerLeave={() => setHovered((h) => (h === option.id ? null : h))}
-                  onFocus={() => setHovered(option.id)}
+                  // Keyboard focus previews like hover; focus set by the page alone doesn't.
+                  onFocus={(event) => {
+                    if (event.currentTarget.matches(":focus-visible")) setHovered(option.id);
+                  }}
                   onBlur={() => setHovered((h) => (h === option.id ? null : h))}
                 >
                   {ticking ? <span className="option-tick" aria-hidden="true" /> : null}

@@ -194,6 +194,8 @@ export class TownStore {
     }
 
     this.queue.shift();
+    // The agent was waiting on the user, not silent: its silence starts now.
+    this.touch();
     if (question.slot) {
       const labels = optionIds.map((id) => question.options.find((o) => o.id === id)!.label);
       if (text) labels.push(text);
@@ -232,6 +234,8 @@ export class TownStore {
     }
     const { resolve } = this.pendingPlan;
     this.pendingPlan = null;
+    // As for an answer: the agent's silence starts with the user's decision.
+    this.touch();
     resolve(result);
     this.emit();
     return "ok";

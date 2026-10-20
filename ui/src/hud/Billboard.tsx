@@ -7,14 +7,24 @@ import { billboardCard, type BillboardCard } from "../logic.ts";
 import type { Town } from "../use-town.ts";
 import { QuestionCard } from "./QuestionCard.tsx";
 
-type Props = { state: TownState; postAnswer: Town["postAnswer"] };
+type Props = {
+  state: TownState;
+  postAnswer: Town["postAnswer"];
+  /** Move keyboard focus to a new card (false while the entry screen is up). */
+  takeFocus: boolean;
+};
 
-function cardFor(card: BillboardCard | null, { state, postAnswer }: Props): ReactNode {
+function cardFor(card: BillboardCard | null, { state, postAnswer, takeFocus }: Props): ReactNode {
   switch (card) {
     case "question":
       // Keyed by question, so a new question starts with nothing ticked or typed.
       return (
-        <QuestionCard key={state.pending!.id} question={state.pending!} postAnswer={postAnswer} />
+        <QuestionCard
+          key={state.pending!.id}
+          question={state.pending!}
+          postAnswer={postAnswer}
+          takeFocus={takeFocus}
+        />
       );
     // The plan card (Build it / Change something) and the report card go here.
     case "plan":

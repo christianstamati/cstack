@@ -1,4 +1,5 @@
 import { Canvas } from "@react-three/fiber";
+import { useState } from "react";
 
 import { Billboard } from "./hud/Billboard.tsx";
 import { Credits } from "./hud/Credits.tsx";
@@ -28,6 +29,8 @@ export function App() {
   const town = useTown();
   const music = useMusic();
   const status = statusLine(town);
+  // Until the entry screen is gone, keyboard focus stays on it.
+  const [entered, setEntered] = useState(false);
   return (
     <>
       <Canvas
@@ -54,11 +57,18 @@ export function App() {
       {town.state ? (
         <>
           <CraneStatus state={town.state} />
-          <TerminalSign state={town.state} />
-          <Billboard state={town.state} postAnswer={town.postAnswer} />
+          {/* While disconnected the pill says "Connecting…" and the state may be old. */}
+          {town.connected ? <TerminalSign state={town.state} /> : null}
+          <Billboard state={town.state} postAnswer={town.postAnswer} takeFocus={entered} />
         </>
       ) : null}
-      <Entry projectName={town.state?.projectName ?? null} onEnter={music.start} />
+      <Entry
+        projectName={town.state?.projectName ?? null}
+        onEnter={() => {
+          setEntered(true);
+          music.start();
+        }}
+      />
       {status ? (
         <div className="hud-pill" role="status">
           {status}

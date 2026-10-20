@@ -166,6 +166,31 @@ test("progress, report and status update state and lastAgentActivity", () => {
   expect(store.getState().lastAgentActivity).toBe(400);
 });
 
+test("an answer restarts the silence clock, a stale or invalid one does not", async () => {
+  let t = 100;
+  const store = new TownStore("my-app", () => t);
+  const asked = store.ask(frontendQ);
+  const { id } = store.getState().pending!;
+  // The user takes a minute: the agent is only waiting on them, not silent.
+  t = 60_100;
+  expect(store.answer({ questionId: "other", optionIds: ["nextjs"] })).toBe("stale");
+  expect(store.answer({ questionId: id, optionIds: ["nope"] })).toBe("invalid");
+  expect(store.getState().lastAgentActivity).toBe(100);
+  expect(store.answer({ questionId: id, optionIds: ["nextjs"] })).toBe("ok");
+  await asked;
+  expect(store.getState().lastAgentActivity).toBe(60_100);
+});
+
+test("a plan decision restarts the silence clock", async () => {
+  let t = 100;
+  const store = new TownStore("my-app", () => t);
+  const built = store.showPlan(plan);
+  t = 90_000;
+  expect(store.answer({ questionId: "plan", action: "build" })).toBe("ok");
+  await built;
+  expect(store.getState().lastAgentActivity).toBe(90_000);
+});
+
 test("progress moves the interview or plan phase to build", () => {
   const store = new TownStore("my-app");
   store.progress({ name: "scaffold", slots: [], status: "started" });

@@ -65,7 +65,8 @@ export function Preview({ state }: { state: TownState }) {
     const option = target.options.at(-1)!;
     const Model = buildingFor(slot.id, option.id);
     return (
-      <OnSpot at={slot.lot}>
+      // Keyed by option: a new option is a new model, measured afresh for its logo sign.
+      <OnSpot key={option.id} at={slot.lot}>
         <Float y={taken ? FLOAT_TAKEN : FLOAT_EMPTY}>
           <Signed stage="preview" theme={theme} auto={false} logo={`${slot.id}:${option.id}`}>
             <Model label={option.label} stage="preview" theme={theme} />
