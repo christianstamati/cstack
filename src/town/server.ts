@@ -15,6 +15,8 @@ export interface TownServer {
   url: string;
   mcpUrl: string;
   token: string;
+  /** The underlying http server (exposed so tests can check its timeouts). */
+  http: Server;
   close(): Promise<void>;
 }
 
@@ -252,6 +254,11 @@ export async function startTownServer(input: StartTownServerInput): Promise<Town
     });
   });
 
+  // `ask` and `plan` hold an /mcp request open while a human thinks, so no request
+  // may be timed out by the server.
+  server.requestTimeout = 0;
+  server.timeout = 0;
+
   await new Promise<void>((resolveListen, rejectListen) => {
     server.once("error", rejectListen);
     server.listen(0, "127.0.0.1", () => {
@@ -266,6 +273,7 @@ export async function startTownServer(input: StartTownServerInput): Promise<Town
     url: `${origin}/?token=${token}`,
     mcpUrl: `${origin}/mcp?token=${token}`,
     token,
+    http: server,
     close() {
       closing ??= new Promise<void>((resolveClose) => {
         for (const res of streams) res.end();
