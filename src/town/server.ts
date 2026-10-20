@@ -1,7 +1,7 @@
 // Local HTTP server for one town session: serves the built page, streams the
 // town state to it by server-sent events and accepts answers. The MCP handler
-// is mounted at /mcp by the caller. Binds to 127.0.0.1 only and every request
-// must carry the random session token.
+// is mounted at /mcp by the caller. Binds to 127.0.0.1 only, and every request
+// except the page's own built files must carry the random session token.
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
@@ -184,54 +184,101 @@ export async function startTownServer(input: StartTownServerInput): Promise<Town
     else send(res, 400, "Bad Request");
   };
 
-  const handleStatic = async (pathname: string, res: ServerResponse) => {
+  /** Maps a request path to a file under the page directory, or the index.html fallback. */
+  const resolveStatic = async (
+    pathname: string,
+  ): Promise<{ file: string; fallback: boolean } | { status: number }> => {
     let decoded: string;
     try {
       decoded = decodeURIComponent(pathname);
     } catch {
-      send(res, 400, "Bad Request");
-      return;
+      return { status: 400 };
     }
-    if (decoded.includes("\0")) {
-      send(res, 400, "Bad Request");
-      return;
-    }
+    if (decoded.includes("\0")) return { status: 400 };
     const target = resolve(uiRoot, "." + decoded);
-    if (target !== uiRoot && !target.startsWith(uiRoot + sep)) {
-      send(res, 403, "Forbidden");
-      return;
-    }
-    const ext = extname(target).toLowerCase();
-    let file = target;
+    if (target !== uiRoot && !target.startsWith(uiRoot + sep)) return { status: 403 };
     let isFile = false;
     try {
       isFile = (await stat(target)).isFile();
     } catch {
       isFile = false;
     }
-    if (!isFile) {
-      if (ext !== "") {
-        send(res, 404, "Not Found");
-        return;
-      }
-      file = resolve(uiRoot, "index.html");
-    }
+    if (isFile) return { file: target, fallback: false };
+    if (extname(target) !== "") return { status: 404 };
+    return { file: resolve(uiRoot, "index.html"), fallback: true };
+  };
+
+  const serveFile = async (file: string, req: IncomingMessage, res: ServerResponse) => {
+    let data: Buffer;
     try {
-      const data = await readFile(file);
-      const type = CONTENT_TYPES[extname(file).toLowerCase()] ?? "application/octet-stream";
-      send(res, 200, data, { "content-type": type });
+      data = await readFile(file);
     } catch {
       send(res, 404, "Not Found");
+      return;
     }
+    const type = CONTENT_TYPES[extname(file).toLowerCase()] ?? "application/octet-stream";
+    const headers = { "content-type": type, "accept-ranges": "bytes" };
+    // Safari only plays audio from servers that answer byte-range requests.
+    const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range ?? "");
+    if (!range || (range[1] === "" && range[2] === "")) {
+      send(res, 200, data, { ...headers, "content-length": String(data.length) });
+      return;
+    }
+    const size = data.length;
+    let first: number;
+    let last: number;
+    if (range[1] === "") {
+      first = Math.max(0, size - Number(range[2]));
+      last = size - 1;
+    } else {
+      first = Number(range[1]);
+      last = range[2] === "" ? size - 1 : Math.min(Number(range[2]), size - 1);
+    }
+    if (first >= size || first > last) {
+      send(res, 416, "Range Not Satisfiable", { ...headers, "content-range": `bytes */${size}` });
+      return;
+    }
+    send(res, 206, data.subarray(first, last + 1), {
+      ...headers,
+      "content-length": String(last + 1 - first),
+      "content-range": `bytes ${first}-${last}/${size}`,
+    });
+  };
+
+  const handleStatic = async (pathname: string, req: IncomingMessage, res: ServerResponse) => {
+    const found = await resolveStatic(pathname);
+    if ("status" in found) {
+      const text = { 400: "Bad Request", 403: "Forbidden", 404: "Not Found" }[found.status];
+      send(res, found.status, text ?? "");
+      return;
+    }
+    await serveFile(found.file, req, res);
+  };
+
+  /**
+   * The page loads its built files by relative paths, which drop the `?token=` query.
+   * Those files are the published package's own scripts, styles and music, so they are
+   * served without the token. The page itself and everything that reads or changes the
+   * session (events, answers, MCP) still needs it.
+   */
+  const isPublicFile = async (pathname: string, method: string): Promise<string | null> => {
+    if (method !== "GET" && method !== "HEAD") return null;
+    if (pathname === "/events" || pathname === "/answer" || pathname === "/mcp") return null;
+    const found = await resolveStatic(pathname);
+    if ("status" in found || found.fallback) return null;
+    if (extname(found.file).toLowerCase() === ".html") return null;
+    return found.file;
   };
 
   const route = async (req: IncomingMessage, res: ServerResponse) => {
     const url = new URL(req.url ?? "/", "http://127.0.0.1");
+    const method = req.method ?? "GET";
     if (!hasToken(url.searchParams.get("token"))) {
+      const file = await isPublicFile(url.pathname, method);
+      if (file) return serveFile(file, req, res);
       send(res, 401, "Unauthorized");
       return;
     }
-    const method = req.method ?? "GET";
     switch (url.pathname) {
       case "/events":
         if (method !== "GET") return methodNotAllowed(res, "GET");
@@ -244,7 +291,7 @@ export async function startTownServer(input: StartTownServerInput): Promise<Town
         return mcp(req, res);
       default:
         if (method !== "GET" && method !== "HEAD") return methodNotAllowed(res, "GET, HEAD");
-        return handleStatic(url.pathname, res);
+        return handleStatic(url.pathname, req, res);
     }
   };
 

@@ -111,6 +111,40 @@ test("serves static files with content types", async () => {
   expect(css.headers.get("content-type")).toContain("text/css");
 });
 
+test("built files load without the token, the page and the API do not", async () => {
+  // A page built with relative asset paths requests ./assets/x.js without the query string.
+  const js = await fetch(`${base}/app.js`);
+  expect(js.status).toBe(200);
+  expect(await js.text()).toBe("console.log(1)");
+  expect((await fetch(`${base}/assets/a.css`)).status).toBe(200);
+  expect((await fetch(`${base}/assets/a.css`, { method: "HEAD" })).status).toBe(200);
+  expect((await fetch(`${base}/index.html`)).status).toBe(401);
+  expect((await fetch(`${base}/some/route`)).status).toBe(401);
+  expect((await fetch(`${base}/assets`)).status).toBe(401);
+  expect((await fetch(`${base}/missing.js`)).status).toBe(401);
+  expect((await fetch(`${base}/app.js`, { method: "POST" })).status).toBe(401);
+});
+
+test("byte ranges are served for media", async () => {
+  const full = await fetch(`${base}/app.js`);
+  expect(full.headers.get("accept-ranges")).toBe("bytes");
+  const part = await fetch(`${base}/app.js`, { headers: { range: "bytes=0-6" } });
+  expect(part.status).toBe(206);
+  expect(part.headers.get("content-range")).toBe("bytes 0-6/14");
+  expect(part.headers.get("content-length")).toBe("7");
+  expect(await part.text()).toBe("console");
+  const open = await fetch(`${base}/app.js`, { headers: { range: "bytes=8-" } });
+  expect(await open.text()).toBe("log(1)");
+  const suffix = await fetch(`${base}/app.js`, { headers: { range: "bytes=-3" } });
+  expect(await suffix.text()).toBe("(1)");
+  const beyond = await fetch(`${base}/app.js`, { headers: { range: "bytes=99-" } });
+  expect(beyond.status).toBe(416);
+  expect(beyond.headers.get("content-range")).toBe("bytes */14");
+  const odd = await fetch(`${base}/app.js`, { headers: { range: "lines=1-2" } });
+  expect(odd.status).toBe(200);
+  expect(await odd.text()).toBe("console.log(1)");
+});
+
 test("unknown paths without an extension fall back to index.html", async () => {
   const res = await fetch(`${base}/some/route?token=${token}`);
   expect(res.status).toBe(200);
@@ -128,21 +162,18 @@ test("path traversal is rejected", async () => {
       "/../town-secret.txt",
       "/%2e%2e/town-secret.txt",
       "/..%2ftown-secret.txt",
-    ]) {
+    ].flatMap((p) => [`${p}?token=${token}`, p])) {
       // Raw request so the client does not normalise the path.
       const status = await new Promise<number>((resolve, reject) => {
-        const req = request(
-          { host: "127.0.0.1", port: new URL(base).port, path: `${path}?token=${token}` },
-          (res) => {
-            res.resume();
-            resolve(res.statusCode ?? 0);
-          },
-        );
+        const req = request({ host: "127.0.0.1", port: new URL(base).port, path }, (res) => {
+          res.resume();
+          resolve(res.statusCode ?? 0);
+        });
         req.on("error", reject);
         req.end();
       });
       expect(status).not.toBe(200);
-      expect([400, 403, 404]).toContain(status);
+      expect([400, 401, 403, 404]).toContain(status);
     }
   } finally {
     rmSync(join(dir, "..", "town-secret.txt"), { force: true });

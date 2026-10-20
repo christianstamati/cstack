@@ -30,19 +30,27 @@
     "access": "public"
   },
   "scripts": {
-    "build": "vp pack",
+    "build": "vp pack && vp run build:ui",
+    "build:ui": "vp build ui",
     "check": "vp check",
     "test": "vp test",
     "sync-prompt": "bun scripts/sync-prompt.ts",
-    "ready": "vp check && vp test && vp pack",
-    "prepublishOnly": "vp check && vp test && vp pack",
+    "ready": "vp check && vp test && vp run build",
+    "prepublishOnly": "vp check && vp test && vp run build && bun scripts/check-pack-size.ts",
     "prepare": "vp config"
   },
   "devDependencies": {
     "@modelcontextprotocol/client": "^2.3.1",
     "@modelcontextprotocol/node": "^2.1.1",
     "@modelcontextprotocol/server": "^2.3.1",
+    "@react-three/fiber": "^9.8.2",
     "@types/bun": "^1.4.3",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@types/three": "^0.186.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "three": "^0.186.1",
     "vite": "npm:@voidzero-dev/vite-plus-core@1.2.0",
     "vite-plus": "1.2.0",
     "zod": "^4.6.7"

@@ -76,9 +76,12 @@ doesn't match what `--defaults` writes (`src/prompt.ts`).
 bun install
 vp check
 vp test
-bun src/index.ts create my-app   # run from source
-vp pack                   # build dist/index.mjs, the published bin
+bun src/index.ts create my-app   # run from source (serves the page from dist/ui)
+vp run build              # dist/index.mjs (the published bin), then the page into dist/ui
 ```
+
+The town page is a React Three Fiber app in `ui/` with its own `tsconfig.json`;
+`vp check` and `vp test` cover it too.
 
 ## Publishing
 
@@ -87,5 +90,11 @@ npm version patch
 npm publish
 ```
 
-`prepublishOnly` runs `vp check`, `vp test` and `vp pack` first, so a broken build
-can't be published.
+`prepublishOnly` runs `vp check`, `vp test` and `vp run build` first, then
+`scripts/check-pack-size.ts`, so a broken build, or a tarball over 3 MB, can't be published.
+
+## Credits
+
+Music: "Lofi Hip Hop Loop" by OMF-Games
+([OpenGameArt](https://opengameart.org/content/lofi-hip-hop-loop), CC0), shipped as an
+MP3 transcode.
