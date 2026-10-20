@@ -79,7 +79,8 @@ skip-all-permissions mode.
 - `npx` and `bunx` can download and run any npm package without asking. Check what the
   agent is about to install if that matters to you.
 - `--ask-everything` keeps the prompts: Claude Code asks before every command and edit,
-  and Codex asks before everything except known-safe read-only commands.
+  and Codex asks before everything except known-safe read-only commands. File edits in the
+  project folder are still accepted automatically.
 
 ### When the text interview is used instead
 
@@ -101,7 +102,8 @@ and agent docs.
    `--defaults` or `--config`, `.cstack/config.json`.
 4. It starts the agent in the new folder with a one-line instruction to read that file.
    In town mode it also starts the local page and gives the agent the `cstack` tools to
-   ask, show the plan and report progress. If neither agent is installed, it prints the file's path so you can paste it into
+   ask, show the plan and report progress.
+5. If neither agent is installed, it prints the file's path so you can paste it into
    any agent.
 
 The agent works in four phases: interview, plan, build (one commit per step), verify
@@ -133,7 +135,7 @@ bun install
 vp check
 vp test
 bun src/index.ts create my-app   # run from source (serves the page from dist/ui)
-vp run build              # dist/index.mjs (the published bin), then the page into dist/ui
+vp run build                     # dist/index.mjs (the published bin), then the page into dist/ui
 bun scripts/check-pack-size.ts   # fails if the npm tarball is over 3 MB
 ```
 

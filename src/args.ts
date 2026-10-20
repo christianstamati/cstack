@@ -39,9 +39,9 @@ Options:
   --model <name>          Model passed through to the agent CLI.
   --defaults              Skip the interview and use the cstack defaults.
   --config <file>         Reuse a saved .cstack/config.json.
-  --terminal              Stay in the terminal instead of opening the town.
-  --no-open               Don't open the browser automatically.
-  --ask-everything        Ask every question instead of using sensible defaults.
+  --terminal              Use the text interview in the terminal instead of the 3D town.
+  --no-open               Start the town and print its URL, but don't open the browser.
+  --ask-everything        Keep the agent's permission prompts instead of the town's allowlist.
   -h, --help              Show this help.
 
 Arguments after -- go to the agent CLI, e.g. -- --permission-mode acceptEdits`;
