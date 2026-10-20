@@ -37,7 +37,7 @@ function createServer(store: TownStore): McpServer {
         "Ask the user one question in the town. Waits until the user answers in their browser, " +
         "which can take minutes: do not continue before it returns. Returns JSON " +
         '{ "optionIds": string[], "text"?: string }. Use the answer as given.',
-      inputSchema: z.object({
+      inputSchema: z.strictObject({
         slot: slot
           .nullable()
           .describe("The slot this question fills, or null if it is not a stack choice."),
@@ -57,7 +57,7 @@ function createServer(store: TownStore): McpServer {
         freeText: z.boolean().default(false),
       }),
     },
-    (args) => guard(async () => json(await store.ask(args))),
+    (args, ctx) => guard(async () => json(await store.ask(args, ctx.mcpReq.signal))),
   );
 
   server.registerTool(
@@ -66,7 +66,7 @@ function createServer(store: TownStore): McpServer {
       description:
         "Report an answer you settled without asking (a preset, a forced choice, a skipped " +
         'question), with the reason. For a slot that does not apply, pass optionIds: [] and labels: ["Not needed"].',
-      inputSchema: z.object({
+      inputSchema: z.strictObject({
         slot,
         optionIds: z.array(z.string()),
         labels: z.array(z.string()),
@@ -86,14 +86,14 @@ function createServer(store: TownStore): McpServer {
       description:
         "Show the plan for approval (Phase 2). Waits until the user approves or asks to change " +
         'a choice, which can take minutes. Returns JSON { "action": "build" } or { "action": "change", "slot": string }.',
-      inputSchema: z.object({
+      inputSchema: z.strictObject({
         rows: z.array(z.object({ label: z.string(), value: z.string(), auto: z.boolean() })),
         tree: z.string(),
         generators: z.array(z.string()),
         manualSteps: z.array(z.string()),
       }),
     },
-    (args) => guard(async () => json(await store.showPlan(args))),
+    (args, ctx) => guard(async () => json(await store.showPlan(args, ctx.mcpReq.signal))),
   );
 
   server.registerTool(
@@ -102,7 +102,7 @@ function createServer(store: TownStore): McpServer {
       description:
         "Report a build step (Phase 3): once with status started, again with done or failed, " +
         "listing the slots the step builds.",
-      inputSchema: z.object({
+      inputSchema: z.strictObject({
         name: z.string(),
         slots: z.array(slot),
         status: z.enum(["started", "done", "failed"]),
@@ -121,7 +121,7 @@ function createServer(store: TownStore): McpServer {
     {
       description:
         "Send the final report (Phase 4). Give each manual step the slot it belongs to, or null.",
-      inputSchema: z.object({
+      inputSchema: z.strictObject({
         built: z.array(z.string()),
         commands: z.array(z.string()),
         manualSteps: z.array(z.object({ slot: slot.nullable(), text: z.string() })),
@@ -140,7 +140,7 @@ function createServer(store: TownStore): McpServer {
     {
       description:
         "Show one short line of what you are doing, before any work that takes more than a few seconds.",
-      inputSchema: z.object({ text: z.string() }),
+      inputSchema: z.strictObject({ text: z.string() }),
     },
     (args) =>
       guard(() => {

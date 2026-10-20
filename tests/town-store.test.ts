@@ -204,3 +204,40 @@ test("subscribers get a snapshot on every change", () => {
   store.setStatus("c");
   expect(calls).toBe(3);
 });
+
+test("an aborted ask is withdrawn and the next question becomes pending", async () => {
+  const store = new TownStore("my-app");
+  const controller = new AbortController();
+  const first = store.ask(frontendQ, controller.signal);
+  const second = store.ask({ ...frontendQ, question: "Second?" });
+  const firstResult = expect(first).rejects.toThrow("cancelled");
+  controller.abort();
+  await firstResult;
+  expect(store.getState().pending?.question).toBe("Second?");
+  store.answer({ questionId: store.getState().pending!.id, optionIds: ["nextjs"] });
+  await second;
+  expect(store.getState().pending).toBeNull();
+});
+
+test("an already aborted ask is not queued", async () => {
+  const store = new TownStore("my-app");
+  await expect(store.ask(frontendQ, AbortSignal.abort())).rejects.toThrow("cancelled");
+  expect(store.getState().pending).toBeNull();
+});
+
+test("an aborted plan is withdrawn", async () => {
+  const store = new TownStore("my-app");
+  const controller = new AbortController();
+  const result = expect(store.showPlan(plan, controller.signal)).rejects.toThrow("cancelled");
+  controller.abort();
+  await result;
+  expect(store.answer({ questionId: "plan", action: "build" })).toBe("stale");
+});
+
+test("a question that cannot be answered is refused", () => {
+  const store = new TownStore("my-app");
+  expect(() => store.ask({ ...frontendQ, options: [] })).toThrow("options");
+  expect(() => store.ask({ ...frontendQ, options: [opt("a"), opt("a")] })).toThrow("unique");
+  expect(store.getState().pending).toBeNull();
+  void store.ask({ ...frontendQ, options: [], freeText: true });
+});

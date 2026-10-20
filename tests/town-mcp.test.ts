@@ -175,3 +175,43 @@ test("a request without the token never reaches the handler", async () => {
   const res = await fetch(new URL("/mcp", server.mcpUrl), { method: "POST" });
   expect(res.status).toBe(401);
 });
+
+test("an ask dropped by the client is withdrawn", async () => {
+  const controller = new AbortController();
+  const request = fetch(server.mcpUrl, {
+    method: "POST",
+    signal: controller.signal,
+    headers: {
+      "content-type": "application/json",
+      accept: "application/json, text/event-stream",
+    },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: { name: "ask", arguments: deployQuestion },
+    }),
+  }).catch(() => undefined);
+  await waitFor(() => store.getState().pending);
+  controller.abort();
+  await request;
+  await waitFor(() => store.getState().pending === null);
+});
+
+test("an unanswerable question is a tool error", async () => {
+  const result = await client.callTool({
+    name: "ask",
+    arguments: { ...deployQuestion, options: [] },
+  });
+  expect(result.isError).toBe(true);
+  expect(store.getState().pending).toBeNull();
+});
+
+test("a misspelled field is a tool error", async () => {
+  const result = await client.callTool({
+    name: "ask",
+    arguments: { ...deployQuestion, multiselect: true },
+  });
+  expect(result.isError).toBe(true);
+  expect(store.getState().pending).toBeNull();
+});

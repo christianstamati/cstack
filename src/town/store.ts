@@ -70,15 +70,39 @@ export class TownStore {
     };
   }
 
-  ask(input: Omit<Question, "id">): Promise<AskResult> {
+  /**
+   * Queues a question. If `signal` aborts before it is answered (the agent gave up
+   * waiting), the question is withdrawn and the returned promise rejects.
+   */
+  ask(input: Omit<Question, "id">, signal?: AbortSignal): Promise<AskResult> {
+    if (!input.freeText && input.options.length === 0) {
+      throw new Error("A question needs options, or freeText: true.");
+    }
+    if (new Set(input.options.map((o) => o.id)).size !== input.options.length) {
+      throw new Error("Option ids must be unique.");
+    }
     this.touch();
     if (this.state.agentStopped) {
       this.emit();
       return Promise.reject(new AgentStoppedError());
     }
     const question: Question = { ...input, id: crypto.randomUUID() };
+    if (signal?.aborted) return Promise.reject(new Error("The question was cancelled."));
     return new Promise<AskResult>((resolve, reject) => {
-      this.queue.push({ question, resolve, reject });
+      const entry: QueuedQuestion = { question, resolve, reject };
+      this.queue.push(entry);
+      signal?.addEventListener(
+        "abort",
+        () => {
+          const index = this.queue.indexOf(entry);
+          if (index === -1) return;
+          this.queue.splice(index, 1);
+          this.syncPending();
+          reject(new Error("The question was cancelled."));
+          this.emit();
+        },
+        { once: true },
+      );
       this.syncPending();
       this.emit();
     });
@@ -96,7 +120,7 @@ export class TownStore {
     this.emit();
   }
 
-  showPlan(plan: PlanView): Promise<PlanResult> {
+  showPlan(plan: PlanView, signal?: AbortSignal): Promise<PlanResult> {
     this.touch();
     if (this.state.agentStopped) {
       this.emit();
@@ -106,8 +130,19 @@ export class TownStore {
     this.pendingPlan?.reject(new Error("The plan was replaced by a newer one."));
     this.state.plan = plan;
     this.state.phase = "plan";
+    if (signal?.aborted) return Promise.reject(new Error("The plan was cancelled."));
     return new Promise<PlanResult>((resolve, reject) => {
-      this.pendingPlan = { resolve, reject };
+      const entry: PendingPlan = { resolve, reject };
+      this.pendingPlan = entry;
+      signal?.addEventListener(
+        "abort",
+        () => {
+          if (this.pendingPlan !== entry) return;
+          this.pendingPlan = null;
+          reject(new Error("The plan was cancelled."));
+        },
+        { once: true },
+      );
       this.emit();
     });
   }

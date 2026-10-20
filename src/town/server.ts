@@ -254,8 +254,8 @@ export async function startTownServer(input: StartTownServerInput): Promise<Town
     });
   });
 
-  // `ask` and `plan` hold an /mcp request open while a human thinks, so no request
-  // may be timed out by the server.
+  // Node's requestTimeout only bounds receiving a request, so this is belt and braces.
+  // What keeps a long `ask` or `plan` alive is the MCP transport's SSE keep-alive.
   server.requestTimeout = 0;
   server.timeout = 0;
 
