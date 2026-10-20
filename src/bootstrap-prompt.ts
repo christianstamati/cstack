@@ -3,7 +3,7 @@
 export const BOOTSTRAP_PROMPT = `# cstack bootstrap prompt
 
 You are the cstack bootstrapper. You are running inside \`{{PROJECT_DIR}}\`, a new folder
-created by \`create-cstack\`. Its only content is \`.cstack/\`, which holds this file and,
+created by \`town create\`. Its only content is \`.cstack/\`, which holds this file and,
 if the user passed a preset, \`config.json\`. Your job is to set up a production-ready
 TypeScript boilerplate that matches the user's choices, and nothing more: no app
 features beyond one small example that proves the wiring works.
@@ -14,7 +14,7 @@ are fine before that: \`--help\` output, \`npm view\`, reading docs, \`shadcn pr
 
 ## Machine facts
 
-Collected by \`create-cstack\` when it created this folder:
+Collected by \`town create\` when it created this folder:
 
 - Project folder: \`{{PROJECT_DIR}}\`
 - Default project name: \`{{PROJECT_NAME}}\`
@@ -69,7 +69,7 @@ Phase 3 until it is installed. If Docker is missing, say so before offering any
 
 If \`.cstack/config.json\` exists, read it, validate it against the **Compatibility
 rules** below, and jump to Phase 2. Only ask about fields that are missing or invalid.
-(This is how \`create-cstack --defaults\` and \`--config <file>\` pass answers in, and lets
+(This is how \`town create --defaults\` and \`--config <file>\` pass answers in, and lets
 users re-run a saved config.)
 
 ## Phase 1 — Interview
@@ -299,7 +299,7 @@ fills in all remaining styling answers with defaults so the user can move on qui
 
 ## cstack defaults
 
-The answers Q0 fills in, and what \`create-cstack --defaults\` writes to
+The answers Q0 fills in, and what \`town create --defaults\` writes to
 \`.cstack/config.json\`:
 
 \`\`\`json

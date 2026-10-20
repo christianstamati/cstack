@@ -1,7 +1,7 @@
 {
-  "name": "@cstack-dev/create",
-  "version": "0.1.0",
-  "description": "Bootstrap a full-stack TypeScript project with Claude Code or Codex",
+  "name": "@cstack-dev/town",
+  "version": "0.2.0",
+  "description": "Build your stack as a little 3D town with Claude Code or Codex",
   "keywords": [
     "claude-code",
     "cli",
@@ -20,7 +20,7 @@
     "url": "git+https://github.com/christianstamati/cstack.git"
   },
   "bin": {
-    "create-cstack": "dist/index.mjs"
+    "town": "dist/index.mjs"
   },
   "files": [
     "dist"

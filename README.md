@@ -1,17 +1,16 @@
 # cstack
 
-`create-cstack` starts a new full-stack TypeScript project by handing the setup to
+`town create` starts a new full-stack TypeScript project by handing the setup to
 Claude Code or Codex. It creates the project folder, writes a bootstrap prompt into it,
 and opens the agent there. The agent interviews you (structure, toolchain, framework,
 data layer, auth, deploy target, UI styling), shows a plan, and builds the project only
 after you approve it, using each tool's official generator.
 
 ```bash
-npx @cstack-dev/create my-app
+npx @cstack-dev/town create my-app
 ```
 
-`npm create @cstack-dev my-app`, `pnpm create @cstack-dev my-app` and
-`bunx @cstack-dev/create my-app` do the same. Any of them asks which agent to use when both
+`bunx @cstack-dev/town create my-app` and `pnpm dlx @cstack-dev/town create my-app` do the same. Any of them asks which agent to use when both
 are installed:
 
 ```
@@ -29,6 +28,9 @@ Bootstrap with:
 | `--model <name>`        | Model passed through to the agent CLI                                                |
 | `--defaults`            | Skip the interview and go straight to the plan with the cstack defaults              |
 | `--config <file>`       | Reuse a `config.json` saved by an earlier run                                        |
+| `--terminal`            | Stay in the terminal (the only mode so far)                                          |
+| `--no-open`             | Don't open the browser automatically                                                 |
+| `--ask-everything`      | Ask every question instead of using sensible defaults                                |
 | `-- <args>`             | Everything after `--` goes to the agent CLI, e.g. `-- --permission-mode acceptEdits` |
 
 The cstack defaults: a Vite+ monorepo on Bun, TanStack Start, Convex with Convex Auth
@@ -74,7 +76,7 @@ doesn't match what `--defaults` writes (`src/prompt.ts`).
 bun install
 vp check
 vp test
-bun src/index.ts my-app   # run from source
+bun src/index.ts create my-app   # run from source
 vp pack                   # build dist/index.mjs, the published bin
 ```
 
