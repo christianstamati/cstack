@@ -10,11 +10,11 @@ import {
   decorSpots,
   DEFAULT_THEME,
   dropPose,
+  freeCells,
   hoverText,
   isPlanWaiting,
   isThinking,
   LOT_SIZE,
-  ISLAND_RADIUS,
   lotPosition,
   modelKindFor,
   nextLot,
@@ -30,6 +30,7 @@ import {
   uiSettings,
   writeMuted,
 } from "./logic.ts";
+import { blockCentre, blockOf, ENTRANCE, GRID, nearStreet, SLAB } from "./streets.ts";
 
 function uiPlacement(settings: Record<string, string>): Placement {
   return {
@@ -44,17 +45,30 @@ function placement(slot: SlotId, optionIds: string[], labels: string[], auto = f
   return { slot, optionIds, labels, auto };
 }
 
-test("every slot has a lot on the island", () => {
+test("every slot has a lot", () => {
   for (const slot of SLOTS) expect(lotPosition(slot.id)).toHaveLength(3);
 });
 
-test("lots sit on the island top, inside its edge", () => {
+test("a block's lot is the middle of its block", () => {
   for (const slot of SLOTS) {
+    if (!slot.block) continue;
     const [x, y, z] = lotPosition(slot.id);
-    expect([x, z]).toEqual([...slot.lot]);
+    expect([x, z]).toEqual(blockCentre(slot.block));
     expect(y).toBe(0);
-    expect(Math.hypot(x, z)).toBeLessThan(ISLAND_RADIUS - 1);
   }
+});
+
+test("the name sign stands by the entrance; the paint fountain on a free square", () => {
+  const [nx, , nz] = lotPosition("name");
+  expect(Math.hypot(nx - ENTRANCE[0], nz - ENTRANCE[1])).toBeLessThan(5);
+  expect(nearStreet(nx, nz, 0.9)).toBe(false);
+  const [ux, , uz] = lotPosition("ui");
+  expect(
+    freeCells().some((cell) => {
+      const [cx, cz] = blockCentre(cell);
+      return cx === ux && cz === uz;
+    }),
+  ).toBe(true);
 });
 
 test("the token comes from the query string", () => {
@@ -102,29 +116,48 @@ test("mute state round-trips through storage and survives a broken one", () => {
   expect(readMuted(undefined)).toBe(false);
 });
 
-test("trees and rocks keep clear of every lot and stay on the island", () => {
+/** Is (x, z) inside the block of a slot (with `margin` around it)? */
+function inSlotBlock(x: number, z: number, margin = 0): boolean {
+  return SLOTS.some((slot) => {
+    if (!slot.block) return false;
+    const [cx, cz] = blockCentre(slot.block);
+    return Math.max(Math.abs(x - cx), Math.abs(z - cz)) < GRID.block / 2 + margin;
+  });
+}
+
+test("trees and rocks stay on the slab, off every block, street, sign and prop", () => {
   const spots = decorSpots();
-  expect(spots.length).toBeGreaterThan(5);
+  expect(spots.length).toBeGreaterThan(20);
+  const [nx, , nz] = lotPosition("name");
+  const [ux, , uz] = lotPosition("ui");
   for (const spot of spots) {
-    expect(Math.hypot(spot.x, spot.z)).toBeLessThan(ISLAND_RADIUS - 0.7);
-    for (const slot of SLOTS) {
-      const [x, , z] = lotPosition(slot.id);
-      expect(Math.hypot(spot.x - x, spot.z - z)).toBeGreaterThan(LOT_SIZE);
-    }
+    expect(spot.x).toBeGreaterThan(SLAB.minX + 0.5);
+    expect(spot.x).toBeLessThan(SLAB.maxX - 0.5);
+    expect(spot.z).toBeGreaterThan(SLAB.minZ + 0.5);
+    expect(spot.z).toBeLessThan(SLAB.maxZ - 0.5);
+    expect(inSlotBlock(spot.x, spot.z, 0.3)).toBe(false);
+    expect(nearStreet(spot.x, spot.z, 0.3)).toBe(false);
+    expect(Math.hypot(spot.x - nx, spot.z - nz)).toBeGreaterThan(2.4);
+    expect(Math.hypot(spot.x - ux, spot.z - uz)).toBeGreaterThan(1.9);
   }
   expect(decorSpots()).toEqual(spots);
 });
 
-test("trees grow around the edge, not between the lots; the edge stays lush", () => {
+test("a green belt of trees grows round the edge of the slab", () => {
   const trees = decorSpots().filter((spot) => spot.kind === "tree");
-  expect(trees.length).toBeGreaterThanOrEqual(14);
-  for (const tree of trees) {
-    expect(Math.hypot(tree.x, tree.z)).toBeGreaterThan(11.5);
-    for (const slot of SLOTS) {
-      const [x, , z] = lotPosition(slot.id);
-      expect(Math.hypot(tree.x - x, tree.z - z)).toBeGreaterThan(3.1);
-    }
-  }
+  const belt = trees.filter(
+    (t) =>
+      t.x < SLAB.minX + GRID.belt ||
+      t.x > SLAB.maxX - GRID.belt ||
+      t.z < SLAB.minZ + GRID.belt ||
+      t.z > SLAB.maxZ - GRID.belt,
+  );
+  expect(belt.length).toBeGreaterThanOrEqual(24);
+  // On all four sides.
+  expect(belt.some((t) => t.x < SLAB.minX + GRID.belt)).toBe(true);
+  expect(belt.some((t) => t.x > SLAB.maxX - GRID.belt)).toBe(true);
+  expect(belt.some((t) => t.z < SLAB.minZ + GRID.belt)).toBe(true);
+  expect(belt.some((t) => t.z > SLAB.maxZ - GRID.belt)).toBe(true);
 });
 
 test("each placement maps to the right kind of model", () => {
@@ -202,27 +235,39 @@ test("a drop falls, bounces once and settles", () => {
   ).toBeLessThan(0.9);
 });
 
-test("props stand on the island, clear of every lot and of each other", () => {
+test("props stand on the slab, off the streets, clear of each other and of other blocks", () => {
   const extras = SLOTS.find((s) => s.id === "extras")!;
   const methods = SLOTS.find((s) => s.id === "authMethods")!;
   const spots = [
     ...extras.options.map((o, i) => propSpot("extras", o.id, i)),
     ...methods.options.map((o, i) => propSpot("authMethods", o.id, i)),
     propSpot("extras", "storybook", 5),
+    propSpot("extras", "playwright", 6),
   ];
-  for (const [x, z] of spots) expect(Math.hypot(x, z)).toBeLessThan(ISLAND_RADIUS - 1);
+  for (const [x, z] of spots) {
+    expect(x).toBeGreaterThan(SLAB.minX + 1);
+    expect(x).toBeLessThan(SLAB.maxX - 1);
+    expect(z).toBeGreaterThan(SLAB.minZ + 1);
+    expect(z).toBeLessThan(SLAB.maxZ - 1);
+    expect(nearStreet(x, z, 0.6)).toBe(false);
+  }
   for (let i = 0; i < spots.length; i++)
     for (let j = i + 1; j < spots.length; j++)
       expect(Math.hypot(spots[i]![0] - spots[j]![0], spots[i]![1] - spots[j]![1])).toBeGreaterThan(
         0.9,
       );
-  // Extras away from their own lot stay clear of every building lot.
-  for (const option of extras.options.filter((o) => o.id !== "example")) {
-    const [x, z] = propSpot("extras", option.id, 0);
-    for (const slot of SLOTS) {
-      const [lx, , lz] = lotPosition(slot.id);
-      expect(Math.hypot(x - lx, z - lz)).toBeGreaterThan(LOT_SIZE);
-    }
+  // Props stand on their own slot's block, or off every block.
+  const own = (slot: "extras" | "authMethods") => blockCentre(blockOf(slot)!);
+  for (const [slot, list] of [
+    ["extras", extras.options],
+    ["authMethods", methods.options],
+  ] as const) {
+    list.forEach((option, index) => {
+      const [x, z] = propSpot(slot, option.id, index);
+      const [cx, cz] = own(slot);
+      const onOwn = Math.max(Math.abs(x - cx), Math.abs(z - cz)) < GRID.block / 2;
+      expect(onOwn || !inSlotBlock(x, z, 0.3), `${slot}:${option.id}`).toBe(true);
+    });
   }
 });
 
@@ -231,7 +276,7 @@ test("trees keep clear of the props too", () => {
   for (const spot of decorSpots())
     for (const option of extras.options) {
       const [x, z] = propSpot("extras", option.id, 0);
-      expect(Math.hypot(spot.x - x, spot.z - z)).toBeGreaterThan(2);
+      expect(Math.hypot(spot.x - x, spot.z - z)).toBeGreaterThan(1.8);
     }
 });
 
@@ -350,18 +395,23 @@ test("the billboard shows the plan over a question, the question otherwise", () 
   expect(billboardCard(stateAt({ phase: "done", report, agentStopped: true }))).toBe("report");
 });
 
-test("the crane stands just off its lot, on the island, with its jib over the lot", () => {
+test("the crane stands on the street side of its block, off the lot, its hook over the lot", () => {
   for (const slot of SLOTS) {
     const { x, z, yaw, reach } = craneSpot(slot.id);
+    // Never on anybody's lot.
     for (const other of SLOTS) {
-      const [lx, lz] = other.lot;
-      const outside = Math.max(Math.abs(x - lx), Math.abs(z - lz)) > LOT_SIZE / 2;
+      const [lx, , lz] = lotPosition(other.id);
+      const outside = Math.max(Math.abs(x - lx), Math.abs(z - lz)) > LOT_SIZE / 2 + 0.2;
       expect(outside, `${slot.id}'s crane on ${other.id}'s lot`).toBe(true);
     }
-    expect(Math.hypot(x, z)).toBeLessThan(ISLAND_RADIUS - 1);
     // The jib points along local +x, turned by `yaw` round y: its hook hangs over the lot.
-    const [lx, lz] = slot.lot;
+    const [lx, , lz] = lotPosition(slot.id);
     expect(x + Math.cos(yaw) * reach).toBeCloseTo(lx);
     expect(z - Math.sin(yaw) * reach).toBeCloseTo(lz);
+    if (!slot.block) continue;
+    // Its mast stands inside its own block, between the lot and the street, not on it.
+    const [cx, cz] = blockCentre(slot.block);
+    expect(Math.max(Math.abs(x - cx), Math.abs(z - cz))).toBeLessThan(GRID.block / 2 - 0.25);
+    expect(nearStreet(x, z, 0.25)).toBe(false);
   }
 });

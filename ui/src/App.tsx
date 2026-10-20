@@ -6,15 +6,18 @@ import { Credits } from "./hud/Credits.tsx";
 import { Entry } from "./hud/Entry.tsx";
 import { Mute } from "./hud/Mute.tsx";
 import { TerminalSign } from "./hud/TerminalSign.tsx";
-import { Camera } from "./scene/Camera.tsx";
+import { Camera, CAMERA_START } from "./scene/Camera.tsx";
+import { Clouds } from "./scene/Clouds.tsx";
 import { Crane, CraneStatus } from "./scene/Crane.tsx";
+import { Ground } from "./scene/Ground.tsx";
 import { HoverLabel, HoverTracker } from "./scene/Hover.tsx";
-import { Island } from "./scene/Island.tsx";
 import { Links } from "./scene/Links.tsx";
-import { Lots } from "./scene/Lots.tsx";
+import { SurveyPlot } from "./scene/Lots.tsx";
 import { Placements } from "./scene/Placements.tsx";
 import { Preview } from "./scene/Preview.tsx";
-import { Sky } from "./scene/Sky.tsx";
+import { Sky, SkyBackdrop } from "./scene/Sky.tsx";
+import { Blocks, Streets } from "./scene/Streets.tsx";
+import { Traffic } from "./scene/Traffic.tsx";
 import { useMusic } from "./use-music.ts";
 import { useTown, type Town } from "./use-town.ts";
 
@@ -33,19 +36,27 @@ export function App() {
   const [entered, setEntered] = useState(false);
   return (
     <>
+      <SkyBackdrop />
       <Canvas
         className="town"
         shadows="percentage"
         dpr={[1, 2]}
-        camera={{ position: [26, 15.5, 26], fov: 42, near: 0.5, far: 500 }}
+        orthographic
+        gl={{ alpha: true }}
+        camera={{ position: CAMERA_START, zoom: 20, near: 1, far: 300 }}
       >
         <Sky />
-        <Island />
-        <Lots />
+        <Clouds />
+        <Ground />
         {town.state ? (
           <>
+            {/* Streets first: they say when each street is paved, for the cars and links. */}
+            <Streets state={town.state} />
+            <Blocks state={town.state} />
             <Placements state={town.state} />
             <Links state={town.state} />
+            <Traffic state={town.state} />
+            <SurveyPlot state={town.state} />
             <Preview state={town.state} />
             <Crane state={town.state} />
           </>

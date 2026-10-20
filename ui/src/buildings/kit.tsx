@@ -2,16 +2,20 @@
 // windows. Geometry and materials are declared as JSX, so R3F disposes them when a
 // building unmounts (re-answering a question swaps the building).
 //
+// Colours are softened towards a warm white as they are drawn, so every building sits in the
+// town's pastel daylight; windows are glass by day and lit at night (see `useNight`).
+//
 // A building wraps its parts in <Frame stage theme>. Every material (parts, logos, painted
 // text, smoke, blinking lights) takes its stage styling from `stageLook`, the one place a
 // stage's look is decided: `preview` is translucent. The build stages (blueprint,
 // constructing, solid, failed) are added there.
 import { extend, useFrame, type ThreeElement } from "@react-three/fiber";
 import { createContext, useContext, useMemo, useRef, type ReactNode } from "react";
-import { Shape, SRGBColorSpace, type Group, type MeshStandardMaterial } from "three";
+import { Color, Shape, SRGBColorSpace, type Group, type MeshStandardMaterial } from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 
 import { DEFAULT_THEME, type Stage, type Theme } from "../logic.ts";
+import { useNight } from "../scene/daylight.ts";
 
 declare module "@react-three/fiber" {
   interface ThreeElements {
@@ -75,8 +79,30 @@ export function Frame(props: { stage: Stage; theme: Theme; children: ReactNode }
   );
 }
 
-/** How much every part lights itself, against the night. */
-const SELF_LIGHT = 0.2;
+/** How much every part lights itself, so shadowed sides keep their toy colours. */
+const SELF_LIGHT = 0.07;
+
+/** How far colours are softened towards a warm white. */
+const PASTEL = 0.14;
+const pastels = new Map<string, string>();
+
+/** `color` (a #rrggbb hex) softened into the town's pastel palette. */
+export function pastel(color: string): string {
+  let soft = pastels.get(color);
+  if (soft === undefined) {
+    soft = color;
+    if (/^#[0-9a-f]{6}$/i.test(color)) {
+      const n = Number.parseInt(color.slice(1), 16);
+      const white = [255, 248, 238];
+      const channels = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((c, i) =>
+        Math.round(c + (white[i]! - c) * PASTEL),
+      );
+      soft = `#${channels.map((c) => c.toString(16).padStart(2, "0")).join("")}`;
+    }
+    pastels.set(color, soft);
+  }
+  return soft;
+}
 
 interface MatProps {
   color: string;
@@ -88,16 +114,17 @@ interface MatProps {
 /** The flat-shaded material of every part, adjusted for the stage. */
 export function Mat({ color, glow = false, opacity = 1 }: MatProps) {
   const look = stageLook(useKit().stage, opacity);
-  // Every part glows a little in its own colour, so the toy colours still read under the
-  // blue moonlight; windows and neon glow fully.
+  // Every part glows a little in its own colour, so shadowed sides keep their toy colours;
+  // lamps and neon glow fully.
   const strength = glow === true ? 1 : glow === false ? SELF_LIGHT : Math.max(glow, SELF_LIGHT);
+  const soft = pastel(color);
   return (
     <meshStandardMaterial
-      color={color}
+      color={soft}
       flatShading
       roughness={0.85}
       metalness={0}
-      emissive={color}
+      emissive={soft}
       emissiveIntensity={strength + look.glow}
       transparent={look.transparent}
       opacity={look.opacity}
@@ -249,18 +276,42 @@ export function Gable(props: PartProps & { w: number; h: number; d: number }) {
   return <Extruded {...props} points={points} depth={d} />;
 }
 
-/** A lit window: a thin glowing pane. Faces +z unless rotated. */
+/** Window glass by day. */
+const GLASS = "#bfe0ee";
+
+/** A window: a thin pane of glass by day that lights up warm at night (or in its own
+ * `color`, softened by day). Faces +z unless rotated. */
 export function Win(props: Placed & { w?: number; h?: number; color?: string }) {
+  const look = stageLook(useKit().stage);
+  const material = useRef<MeshStandardMaterial>(null);
+  const tint = props.color;
+  const colors = useMemo(
+    () => ({ day: new Color(tint ? pastel(tint) : GLASS), night: new Color(tint ?? LAMP) }),
+    [tint],
+  );
+  useNight(
+    (night) => {
+      const m = material.current;
+      if (!m) return;
+      m.color.lerpColors(colors.day, colors.night, night);
+      m.emissive.copy(m.color);
+      m.emissiveIntensity = (tint ? 0.45 : 0.12) + night * 0.85 + look.glow;
+    },
+    [colors, look.glow],
+  );
   return (
-    <Box
-      position={props.position}
-      rotation={props.rotation}
-      size={[props.w ?? 0.32, props.h ?? 0.38, 0.05]}
-      color={props.color ?? LAMP}
-      glow={0.9}
-      sharp
-      shadow={false}
-    />
+    <mesh position={props.position} rotation={props.rotation}>
+      <boxGeometry args={[props.w ?? 0.32, props.h ?? 0.38, 0.05]} />
+      <meshStandardMaterial
+        ref={material}
+        flatShading
+        roughness={0.3}
+        metalness={0.05}
+        transparent={look.transparent}
+        opacity={look.opacity}
+        depthWrite={look.depthWrite}
+      />
+    </mesh>
   );
 }
 

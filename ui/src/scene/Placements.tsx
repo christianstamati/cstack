@@ -1,11 +1,12 @@
-// Everything the answers put on the island: a building per lot, the entrance sign, the
+// Everything the answers put in the town: a building per block, the entrance sign, the
 // props for extras and sign-in methods, the paint fountain, and "not needed" markers.
-// Each drops in when its answer arrives and shows its label on hover.
+// Each drops in when its answer arrives and shows its label on hover. Buildings face
+// their block's front street (+z); the ones on a block stand on its sidewalk.
 import type { ThreeEvent } from "@react-three/fiber";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Box3, Vector3, type Group, type Object3D } from "three";
 
-import { SLOTS, type SlotDef, type SlotId } from "../../../src/town/catalog.ts";
+import { SLOTS, slotById, type SlotDef, type SlotId } from "../../../src/town/catalog.ts";
 import type { Placement, TownState } from "../../../src/town/protocol.ts";
 import { LogoSign, logoSignHeight } from "../buildings/Badge.tsx";
 import { Drop } from "../buildings/Drop.tsx";
@@ -15,6 +16,7 @@ import { logoFor } from "../buildings/logos.ts";
 import { buildingFor, propFor } from "../buildings/registry.ts";
 import {
   hoverText,
+  lotPosition,
   modelKindFor,
   projectNameFrom,
   propSpot,
@@ -22,9 +24,11 @@ import {
   type Stage,
   type Theme,
 } from "../logic.ts";
+import { blockCentre, GRID } from "../streets.ts";
 import { clearHover, setHover } from "./Hover.tsx";
 import { NameSign } from "./NameSign.tsx";
 import { PaintFountain } from "./Props.tsx";
+import { BLOCK_TOP } from "./Streets.tsx";
 
 /** Every placed model shows as `placed` for now; the build progress adds its stages. */
 const STAGE: Stage = "placed";
@@ -37,9 +41,18 @@ export function propLogoSize(slot: SlotId): number {
   return slot === "authMethods" ? 0.5 : 0.7;
 }
 
-/** Turns a model at (x, z) so its front (+z) faces away from the town centre. */
-function facing(x: number, z: number): number {
-  return x === 0 && z === 0 ? 0 : Math.atan2(x, z);
+/** How high a model of `slot` stands at (x, z): on the sidewalk of the slot's own block
+ * (which rises when the slot is placed), else on the grass. */
+function groundAt(slot: SlotId, [x, z]: readonly [x: number, z: number]): number {
+  const cell = slotById(slot).block;
+  if (!cell) return 0;
+  const [cx, cz] = blockCentre(cell);
+  return Math.max(Math.abs(x - cx), Math.abs(z - cz)) < GRID.block / 2 ? BLOCK_TOP : 0;
+}
+
+/** The entrance sign turns to face the starting view; everything else faces +z. */
+function facing(slot: SlotId): number {
+  return slot === "name" ? Math.PI / 4 : 0;
 }
 
 /** Height of the solid parts of `object` above its own origin, in its own units. Glows and beams that don't
@@ -112,6 +125,7 @@ export function Signed(props: SignedProps) {
 interface PlacedProps {
   /** Unique per model, for the hover label. */
   id: string;
+  slot: SlotId;
   at: readonly [x: number, z: number];
   placement: Placement;
   theme: Theme;
@@ -121,32 +135,42 @@ interface PlacedProps {
   children: ReactNode;
 }
 
-/** Turns a model on its spot so it faces away from the town centre, at the town's scale. */
-export function OnSpot(props: { at: readonly [x: number, z: number]; children: ReactNode }) {
+/** Puts a model of `slot` on its spot, facing its street, at the town's scale. */
+export function OnSpot(props: {
+  slot: SlotId;
+  at: readonly [x: number, z: number];
+  children: ReactNode;
+}) {
   const [x, z] = props.at;
   return (
-    <group position={[x, 0, z]} rotation={[0, facing(x, z), 0]} scale={MODEL_SCALE}>
+    <group
+      position={[x, groundAt(props.slot, props.at), z]}
+      rotation={[0, facing(props.slot), 0]}
+      scale={MODEL_SCALE}
+    >
       {props.children}
     </group>
   );
 }
 
 /** Drops a model onto its spot and anchors the hover label above its roof. */
-function Placed({ id, at, placement, theme, auto, logo, logoSize = 0.95, children }: PlacedProps) {
+function Placed(props: PlacedProps) {
+  const { id, slot, at, placement, theme, auto, logo, logoSize = 0.95, children } = props;
   const [x, z] = at;
+  const y = groundAt(slot, at);
   const top = useRef(2);
   useEffect(() => () => clearHover(id), [id]);
   const text = hoverText(placement);
   const over = (event: ThreeEvent<PointerEvent>) => {
     event.stopPropagation();
-    setHover({ id, ...text, anchor: [x, top.current * MODEL_SCALE, z] });
+    setHover({ id, ...text, anchor: [x, y + top.current * MODEL_SCALE, z] });
   };
   const out = (event: ThreeEvent<PointerEvent>) => {
     event.stopPropagation();
     clearHover(id);
   };
   return (
-    <OnSpot at={at}>
+    <OnSpot slot={slot} at={at}>
       <Drop>
         <Signed
           stage={STAGE}
@@ -174,12 +198,14 @@ function SlotPlacement(props: {
   projectName: string;
 }) {
   const { slot, placement, theme } = props;
-  const lot = slot.lot;
+  const [lx, , lz] = lotPosition(slot.id);
+  const lot = [lx, lz] as const;
   const kind = modelKindFor(slot, placement);
   switch (kind) {
     case "notNeeded":
       return (
         <Placed
+          slot={slot.id}
           theme={theme}
           key="not-needed"
           id={`${slot.id}:not-needed`}
@@ -196,6 +222,7 @@ function SlotPlacement(props: {
       const Model = buildingFor(slot.id, optionId);
       return (
         <Placed
+          slot={slot.id}
           theme={theme}
           key={optionId}
           id={`${slot.id}:${optionId}`}
@@ -212,6 +239,7 @@ function SlotPlacement(props: {
       const name = projectNameFrom(placement, props.projectName);
       return (
         <Placed
+          slot={slot.id}
           theme={theme}
           key={name}
           id={`${slot.id}:${name}`}
@@ -226,7 +254,14 @@ function SlotPlacement(props: {
     case "paint":
       // Always the agent's `decide` (see TOWN.md), so no "auto" flag.
       return (
-        <Placed theme={theme} id={slot.id} at={lot} placement={placement} auto={false}>
+        <Placed
+          slot={slot.id}
+          theme={theme}
+          id={slot.id}
+          at={lot}
+          placement={placement}
+          auto={false}
+        >
           <PaintFountain stage={STAGE} theme={theme} />
         </Placed>
       );
@@ -238,6 +273,7 @@ function SlotPlacement(props: {
             const label = placement.labels[index] ?? optionId;
             return (
               <Placed
+                slot={slot.id}
                 theme={theme}
                 key={optionId}
                 id={`${slot.id}:${optionId}`}

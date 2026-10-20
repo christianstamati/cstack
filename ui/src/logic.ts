@@ -1,16 +1,31 @@
 // Pure helpers for the page, kept free of React and three.js so they can be tested.
 import { SLOTS, slotById, type SlotDef, type SlotId } from "../../src/town/catalog.ts";
 import type { Placement, TownState } from "../../src/town/protocol.ts";
-
-/** Radius of the island's flat top, in world units. Every lot fits inside it. */
-export const ISLAND_RADIUS = 14;
+import {
+  blockCentre,
+  blockOf,
+  ENTRANCE,
+  GRID,
+  nearStreet,
+  SLAB,
+  type Cell,
+  type Point,
+} from "./streets.ts";
 
 /** Width of a lot's square, in world units. */
-export const LOT_SIZE = 3;
+export const LOT_SIZE = GRID.lot;
 
-/** Where a slot's lot sits on the island top, as [x, y, z]. */
+/** Where the entrance sign stands: on the green by the entrance road, left of it. */
+const NAME_SPOT: Point = [ENTRANCE[0] - GRID.street / 2 - 1.7, SLAB.maxZ - 1.5];
+
+/** The paint fountain's town square: the free block in front of the central one. */
+const FOUNTAIN_SPOT: Point = blockCentre([0, 1]);
+
+/** Where a slot's lot sits, as [x, y, z]: the middle of its block; the entrance sign by
+ * the entrance road and the paint fountain on the town square. */
 export function lotPosition(slot: SlotId): [x: number, y: number, z: number] {
-  const [x, z] = slotById(slot).lot;
+  const cell = blockOf(slot);
+  const [x, z] = cell ? blockCentre(cell) : slot === "name" ? NAME_SPOT : FOUNTAIN_SPOT;
   return [x, 0, z];
 }
 
@@ -61,7 +76,7 @@ export function browserStorage(): MuteStorage | undefined {
   }
 }
 
-/** Small deterministic random generator (mulberry32), so the island looks the same every time. */
+/** Small deterministic random generator (mulberry32), so the town looks the same every time. */
 export function seededRandom(seed: number): () => number {
   let a = seed >>> 0;
   return () => {
@@ -81,21 +96,39 @@ export interface DecorSpot {
   rotation: number;
 }
 
-/** Trees ring the shore, so they never stand between the lots or in front of a building;
- * a few low rocks dot the grass in between. Everything keeps clear of every lot, every
- * prop and each other. */
+/** The cells of the grid no slot builds on: little parks among the blocks. */
+export function freeCells(): Cell[] {
+  const taken = new Set(SLOTS.flatMap((slot) => (slot.block ? [slot.block.join(",")] : [])));
+  const free: Cell[] = [];
+  for (let column = GRID.min; column <= GRID.max; column++)
+    for (let row = GRID.min; row <= GRID.max; row++)
+      if (!taken.has(`${column},${row}`)) free.push([column, row]);
+  return free;
+}
+
+/** Is (x, z) on a slot's block, or within `margin` of one? */
+function onSlotBlock(x: number, z: number, margin: number): boolean {
+  return SLOTS.some((slot) => {
+    if (!slot.block) return false;
+    const [cx, cz] = blockCentre(slot.block);
+    return Math.max(Math.abs(x - cx), Math.abs(z - cz)) < GRID.block / 2 + margin;
+  });
+}
+
+/** Trees fill the green belt round the city and the little parks between its blocks; a
+ * few rocks lie in the grass. Nothing grows on a slot's block or a street, so the city
+ * can be built round them, and everything keeps clear of the signs, props and each other. */
 export function decorSpots(seed = 7): DecorSpot[] {
   const random = seededRandom(seed);
-  const lots = SLOTS.map((slot) => slot.lot);
   const props = Object.values(EXTRA_SPOTS);
   const spots: DecorSpot[] = [];
-  const tryPlace = (kind: DecorSpot["kind"], radius: number, lotGap: number) => {
-    const angle = random() * Math.PI * 2;
-    const x = Math.cos(angle) * radius;
-    const z = Math.sin(angle) * radius;
-    if (lots.some(([lx, lz]) => Math.hypot(x - lx, z - lz) <= lotGap)) return;
-    if (props.some(([px, pz]) => Math.hypot(x - px, z - pz) <= 2.3)) return;
-    if (spots.some((s) => Math.hypot(x - s.x, z - s.z) < (kind === "tree" ? 1.5 : 1.8))) return;
+  const tryPlace = (kind: DecorSpot["kind"], x: number, z: number) => {
+    if (onSlotBlock(x, z, 0.35) || nearStreet(x, z, 0.35)) return false;
+    if (Math.hypot(x - NAME_SPOT[0], z - NAME_SPOT[1]) <= 2.6) return false;
+    if (Math.hypot(x - FOUNTAIN_SPOT[0], z - FOUNTAIN_SPOT[1]) <= 2) return false;
+    if (props.some(([px, pz]) => Math.hypot(x - px, z - pz) <= 1.9)) return false;
+    if (spots.some((s) => Math.hypot(x - s.x, z - s.z) < (kind === "tree" ? 1.25 : 1.6)))
+      return false;
     spots.push({
       kind,
       x,
@@ -103,14 +136,30 @@ export function decorSpots(seed = 7): DecorSpot[] {
       scale: kind === "tree" ? 0.75 + random() * 0.4 : 0.6 + random() * 0.5,
       rotation: random() * Math.PI * 2,
     });
+    return true;
   };
-  for (let tries = 0; tries < 3000 && spots.length < 30; tries++)
-    tryPlace("tree", 11.8 + random() * 1.4, 3.3);
-  for (let tries = 0, rocks = 0; tries < 500 && rocks < 8; tries++) {
-    const before = spots.length;
-    tryPlace("rock", 3 + random() * 6.5, LOT_SIZE + 0.4);
-    if (spots.length > before) rocks++;
+  /** A point in the belt: along one of the four sides, between the city and the edge. */
+  const inBelt = (): Point => {
+    const side = Math.floor(random() * 4);
+    const along = SLAB.minX + 0.7 + random() * (SLAB.maxX - SLAB.minX - 1.4);
+    const depth = 0.7 + random() * (GRID.belt - 1.1);
+    if (side === 0) return [along, SLAB.minZ + depth];
+    if (side === 1) return [along, SLAB.maxZ - depth];
+    if (side === 2) return [SLAB.minX + depth, along];
+    return [SLAB.maxX - depth, along];
+  };
+  let trees = 0;
+  for (let tries = 0; tries < 4000 && trees < 46; tries++)
+    if (tryPlace("tree", ...inBelt())) trees++;
+  for (const cell of freeCells()) {
+    const [cx, cz] = blockCentre(cell);
+    const reach = GRID.block / 2 - 0.5;
+    for (let tries = 0, planted = 0; tries < 200 && planted < 4; tries++)
+      if (tryPlace("tree", cx + (random() * 2 - 1) * reach, cz + (random() * 2 - 1) * reach))
+        planted++;
   }
+  for (let tries = 0, rocks = 0; tries < 600 && rocks < 7; tries++)
+    if (tryPlace("rock", ...inBelt())) rocks++;
   return spots;
 }
 
@@ -281,15 +330,25 @@ export function dropPose(t: number): DropPose {
   return { y, squashY: 1 - 0.28 * squash, squashXZ: 1 + 0.16 * squash };
 }
 
-/** Where each extra stands, as [x, z]. The example sits on the extras lot; the rest are
- * spread around the town (the lighthouse on the shore). */
+/** Where each extra stands, as [x, z]. The example and the docs library share the park
+ * block; the lighthouse and the watchtower stand in little parks of their own, and the env
+ * checkpoint by the entrance road. */
+const PARK = blockCentre(blockOf("extras")!);
 export const EXTRA_SPOTS: Readonly<Record<string, readonly [x: number, z: number]>> = {
-  example: slotById("extras").lot,
-  ci: [-6, -11],
-  tests: [-10.5, 6.5],
-  env: [-3, 11.8],
-  "agent-docs": [1.5, -4.5],
+  example: [PARK[0] - 0.95, PARK[1] - 0.7],
+  "agent-docs": [PARK[0] + 0.95, PARK[1] - 0.7],
+  ci: blockCentre([2, 2]),
+  tests: blockCentre([2, -1]),
+  env: [ENTRANCE[0] + GRID.street / 2 + 1.7, SLAB.maxZ - 1.6],
 };
+
+/** Room on the park block for extras the town has no spot for. */
+const PARK_SPOTS = [
+  [-0.95, 1.05],
+  [0.95, 1.05],
+  [0, 0.2],
+  [0, -1.45],
+] as const;
 
 /** The four corners of a lot, for small props that share it. */
 const CORNERS = [
@@ -300,14 +359,17 @@ const CORNERS = [
 ] as const;
 
 /** Where a prop stands, as [x, z]. `index` is its position in the answer: sign-in
- * methods fill their lot's corners in order, unknown extras the extras lot's corners. */
+ * methods fill their block's corners in order, unknown extras the free spots in the park. */
 export function propSpot(slot: SlotId, optionId: string, index: number): [x: number, z: number] {
-  const known = slot === "extras" && Object.hasOwn(EXTRA_SPOTS, optionId);
-  if (known) {
-    const [x, z] = EXTRA_SPOTS[optionId]!;
-    return [x, z];
+  if (slot === "extras") {
+    if (Object.hasOwn(EXTRA_SPOTS, optionId)) {
+      const [x, z] = EXTRA_SPOTS[optionId]!;
+      return [x, z];
+    }
+    const [dx, dz] = PARK_SPOTS[index % PARK_SPOTS.length]!;
+    return [PARK[0] + dx, PARK[1] + dz];
   }
-  const [lx, lz] = slotById(slot).lot;
+  const [lx, , lz] = lotPosition(slot);
   const [dx, dz] = CORNERS[index % CORNERS.length]!;
   return [lx + dx, lz + dz];
 }
@@ -372,16 +434,14 @@ export function billboardCard(state: TownState): BillboardCard | null {
 }
 
 /** How far outside its lot's square the crane's mast stands. */
-const CRANE_GAP = 0.35;
+const CRANE_GAP = 0.25;
+/** From the crane's mast to the middle of its lot: the trolley's reach. */
+export const CRANE_REACH = LOT_SIZE / 2 + CRANE_GAP;
 
-/** Where the thinking crane stands for `slot`'s lot: its mast just off the lot on the
- * side facing the town centre (so it stays clear of the trees on the shore), turned by
- * `yaw` round y so its jib (local +x) reaches `reach` out to the lot's centre. */
+/** Where the thinking crane stands for `slot`'s lot: its mast on the block's back
+ * sidewalk, between the lot and the street behind it, turned by `yaw` round y so its jib
+ * (local +x) reaches out over the lot towards the camera, `reach` to the lot's centre. */
 export function craneSpot(slot: SlotId): { x: number; z: number; yaw: number; reach: number } {
-  const [lx, lz] = slotById(slot).lot;
-  const length = Math.hypot(lx, lz);
-  // From the mast to the lot: outward from the centre (the central lot leans one way).
-  const [dx, dz] = length === 0 ? [-Math.SQRT1_2, -Math.SQRT1_2] : [lx / length, lz / length];
-  const reach = (LOT_SIZE / 2 + CRANE_GAP) / Math.max(Math.abs(dx), Math.abs(dz));
-  return { x: lx - dx * reach, z: lz - dz * reach, yaw: Math.atan2(-dz, dx), reach };
+  const [lx, , lz] = lotPosition(slot);
+  return { x: lx, z: lz - CRANE_REACH, yaw: -Math.PI / 2, reach: CRANE_REACH };
 }

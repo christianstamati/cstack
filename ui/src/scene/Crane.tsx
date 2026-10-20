@@ -6,11 +6,11 @@ import { useFrame } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, type RefObject } from "react";
 import { Vector3, type Group } from "three";
 
-import type { SlotId } from "../../../src/town/catalog.ts";
+import { SLOTS, type SlotId } from "../../../src/town/catalog.ts";
 import type { TownState } from "../../../src/town/protocol.ts";
 import { prefersReducedMotion } from "../buildings/Drop.tsx";
 import { Blinker, Box, Cyl, Frame, PaintedText, STONE, Win, WOOD } from "../buildings/kit.tsx";
-import { craneSpot, DEFAULT_THEME, isThinking, nextLot } from "../logic.ts";
+import { CRANE_REACH, craneSpot, DEFAULT_THEME, isThinking, nextLot } from "../logic.ts";
 
 const YELLOW = "#f2b632";
 const DARK = "#2a2d36";
@@ -20,8 +20,8 @@ const LEVELS = Math.round(MAST_HEIGHT / LEVEL);
 const POST = 0.17;
 /** Hook's cable length, before it bobs. */
 const CABLE = 2.6;
-/** The jib's tip, past the farthest lot centre the trolley ever reaches (about 2.6). */
-const JIB_TIP = 3.3;
+/** The jib's tip: a little past the lot's centre, where the trolley stops. */
+const JIB_TIP = CRANE_REACH + 0.8;
 
 /** A thin beam from `a` to `b` in the plane z = `z` of its parent. */
 function Strut({
@@ -142,6 +142,10 @@ function CableAbove() {
   );
 }
 
+/** Where the crane stands for each slot, worked out once (the frame loop reads it). */
+const SPOTS = new Map(SLOTS.map((slot) => [slot.id, craneSpot(slot.id)]));
+const spot = (slot: SlotId | null) => (slot ? SPOTS.get(slot)! : null);
+
 // The status label's element, moved by the crane every frame without re-rendering React.
 let labelElement: HTMLDivElement | null = null;
 
@@ -160,7 +164,6 @@ export function Crane({ state }: { state: TownState }) {
   const scale = useRef(0);
   const anchor = useMemo(() => new Vector3(), []);
   const still = useMemo(prefersReducedMotion, []);
-  const spot = (slot: SlotId | null) => (slot ? craneSpot(slot) : null);
 
   useFrame(({ clock, camera, size }, delta) => {
     const group = root.current;
@@ -186,9 +189,12 @@ export function Crane({ state }: { state: TownState }) {
 
     const element = labelElement;
     if (!element) return;
-    // Thinking with every lot settled: no crane, so the line waits at the bottom.
-    if (thinking && target === null && shown.current === null) {
-      element.style.transform = `translate(${size.width / 2}px, ${size.height - 90}px)`;
+    // Thinking with every lot settled: no crane, so the line waits at the bottom (docked by
+    // its stylesheet).
+    const docked = thinking && target === null && shown.current === null;
+    if (element.classList.contains("docked") !== docked) element.classList.toggle("docked", docked);
+    if (docked) {
+      element.style.transform = "";
       element.style.visibility = "visible";
       return;
     }
@@ -209,7 +215,7 @@ export function Crane({ state }: { state: TownState }) {
   return (
     <group ref={root} visible={false} scale={0.0001}>
       <Frame stage="placed" theme={DEFAULT_THEME}>
-        <Box position={[0, 0.14, 0]} size={[0.8, 0.28, 0.8]} color={STONE} sharp />
+        <Box position={[0, 0.14, 0]} size={[0.6, 0.28, 0.6]} color={STONE} sharp />
         <Mast />
         <group ref={top} position={[0, MAST_HEIGHT, 0]}>
           <Top trolley={trolley} hook={hook} />

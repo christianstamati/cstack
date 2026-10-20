@@ -560,3 +560,48 @@ body,
     animation: none;
   }
 }
+
+/* The sky behind the town: a gradient set by the time of day, stars and the moon. */
+.sky {
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(180deg, var(--sky-top, #9cc6ef), var(--sky-bottom, #ece0f8));
+}
+
+.sky-stars {
+  position: absolute;
+  inset: 0 0 35% 0;
+  opacity: var(--sky-stars, 0);
+  background-image:
+    radial-gradient(1.5px 1.5px at 23px 41px, #fff8e1, transparent),
+    radial-gradient(1px 1px at 97px 13px, #fff, transparent),
+    radial-gradient(1.5px 1.5px at 151px 88px, #fff, transparent),
+    radial-gradient(1px 1px at 203px 47px, #fff8e1, transparent),
+    radial-gradient(1px 1px at 61px 127px, #fff, transparent),
+    radial-gradient(2px 2px at 177px 161px, #fff8e1, transparent),
+    radial-gradient(1px 1px at 233px 141px, #fff, transparent);
+  background-size: 260px 190px;
+  mask-image: linear-gradient(180deg, #000 40%, transparent);
+}
+
+.sky-moon {
+  position: absolute;
+  top: 9%;
+  left: 13%;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 38% 36%, #fffaf0, #f3e3b8 70%);
+  box-shadow: 0 0 46px 12px rgb(255 240 200 / 0.3);
+  opacity: var(--sky-moon, 0);
+}
+
+.crane-status.docked {
+  left: 50%;
+  top: auto;
+  bottom: 84px;
+}
+
+.crane-status.docked .crane-pill {
+  translate: -50% 0;
+}
