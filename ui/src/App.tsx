@@ -4,8 +4,11 @@ import { Credits } from "./hud/Credits.tsx";
 import { Entry } from "./hud/Entry.tsx";
 import { Mute } from "./hud/Mute.tsx";
 import { Camera } from "./scene/Camera.tsx";
+import { HoverLabel, HoverTracker } from "./scene/Hover.tsx";
 import { Island } from "./scene/Island.tsx";
+import { Links } from "./scene/Links.tsx";
 import { Lots } from "./scene/Lots.tsx";
+import { Placements } from "./scene/Placements.tsx";
 import { Sky } from "./scene/Sky.tsx";
 import { useMusic } from "./use-music.ts";
 import { useTown, type Town } from "./use-town.ts";
@@ -27,13 +30,21 @@ export function App() {
         className="town"
         shadows="percentage"
         dpr={[1, 2]}
-        camera={{ position: [34, 19, 34], fov: 42, near: 0.5, far: 500 }}
+        camera={{ position: [26, 15.5, 26], fov: 42, near: 0.5, far: 500 }}
       >
         <Sky />
         <Island />
         <Lots />
+        {town.state ? (
+          <>
+            <Placements state={town.state} />
+            <Links state={town.state} />
+          </>
+        ) : null}
         <Camera />
+        <HoverTracker />
       </Canvas>
+      <HoverLabel />
       <Entry projectName={town.state?.projectName ?? null} onEnter={music.start} />
       {status ? (
         <div className="hud-pill" role="status">

@@ -1,0 +1,441 @@
+// The parts every building is made of: flat-shaded boxes, cylinders, roofs and glowing
+// windows. Geometry and materials are declared as JSX, so R3F disposes them when a
+// building unmounts (re-answering a question swaps the building).
+//
+// A building wraps its parts in <Frame stage theme>. The parts read the stage from it, so
+// one place decides how a stage looks: `preview` is translucent; the build stages
+// (blueprint, constructing, solid, failed) add their look in `Mat` and `Frame`.
+import { extend, useFrame, type ThreeElement } from "@react-three/fiber";
+import { createContext, useContext, useMemo, useRef, type ReactNode } from "react";
+import { Shape, SRGBColorSpace, type Group, type MeshStandardMaterial } from "three";
+import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
+
+import { DEFAULT_THEME, type Stage, type Theme } from "../logic.ts";
+
+declare module "@react-three/fiber" {
+  interface ThreeElements {
+    roundedBoxGeometry: ThreeElement<typeof RoundedBoxGeometry>;
+  }
+}
+extend({ RoundedBoxGeometry });
+
+export interface BuildingProps {
+  /** The option's label, e.g. "Vercel". */
+  label: string;
+  stage: Stage;
+  theme: Theme;
+}
+
+export type Vec3 = [x: number, y: number, z: number];
+
+/** Shared colours: the warm lamp light in windows, and a few materials. */
+export const LAMP = "#ffd98a";
+export const WOOD = "#9a6b45";
+export const DARK_WOOD = "#6b4a35";
+export const STONE = "#a7a3b5";
+export const METAL = "#8f97a8";
+export const INK = "#22232b";
+export const WHITE = "#f4f1ea";
+
+interface KitValue {
+  stage: Stage;
+  theme: Theme;
+}
+
+const Kit = createContext<KitValue>({ stage: "placed", theme: DEFAULT_THEME });
+
+export function useKit(): KitValue {
+  return useContext(Kit);
+}
+
+/** The root of every building: hands the stage and theme to its parts. */
+export function Frame(props: { stage: Stage; theme: Theme; children: ReactNode }) {
+  const { stage, theme } = props;
+  const value = useMemo(() => ({ stage, theme }), [stage, theme]);
+  return (
+    <Kit.Provider value={value}>
+      <group>{props.children}</group>
+    </Kit.Provider>
+  );
+}
+
+/** How much every part lights itself, against the night. */
+const SELF_LIGHT = 0.2;
+
+interface MatProps {
+  color: string;
+  /** Lights the surface up in its own colour (windows, neon); a number sets the strength. */
+  glow?: boolean | number;
+  opacity?: number;
+}
+
+/** The flat-shaded material of every part, adjusted for the stage. */
+export function Mat({ color, glow = false, opacity = 1 }: MatProps) {
+  const { stage } = useKit();
+  const alpha = opacity * (stage === "preview" ? 0.45 : 1);
+  // Every part glows a little in its own colour, so the toy colours still read under the
+  // blue moonlight; windows and neon glow fully.
+  const strength = glow === true ? 1 : glow === false ? SELF_LIGHT : Math.max(glow, SELF_LIGHT);
+  return (
+    <meshStandardMaterial
+      color={color}
+      flatShading
+      roughness={0.85}
+      metalness={0}
+      emissive={color}
+      emissiveIntensity={strength}
+      transparent={alpha < 1}
+      opacity={alpha}
+      depthWrite={alpha >= 1}
+    />
+  );
+}
+
+interface Placed {
+  position?: Vec3;
+  rotation?: Vec3;
+  scale?: Vec3 | number;
+}
+
+type PartProps = Placed & MatProps & { shadow?: boolean };
+
+function Part(props: PartProps & { children: ReactNode }) {
+  const { position, rotation, scale, color, glow, opacity, shadow = true } = props;
+  return (
+    <mesh
+      position={position}
+      rotation={rotation}
+      scale={scale}
+      castShadow={shadow}
+      receiveShadow={shadow}
+    >
+      {props.children}
+      <Mat color={color} glow={glow} opacity={opacity} />
+    </mesh>
+  );
+}
+
+/** A box, rounded as much as the theme's radius asks unless `sharp`. */
+export function Box(props: PartProps & { size: Vec3; sharp?: boolean }) {
+  const { roundness } = useKit().theme;
+  const [w, h, d] = props.size;
+  const radius = props.sharp ? 0 : Math.min(roundness * Math.min(w, h, d) * 0.3, 0.22);
+  return (
+    <Part {...props}>
+      {radius < 0.005 ? (
+        <boxGeometry args={[w, h, d]} />
+      ) : (
+        <roundedBoxGeometry key={radius} args={[w, h, d, 2, radius]} />
+      )}
+    </Part>
+  );
+}
+
+/** A cylinder; `top` defaults to `r`. Few segments keep it low-poly. */
+export function Cyl(
+  props: PartProps & {
+    r: number;
+    top?: number;
+    h: number;
+    seg?: number;
+    from?: number;
+    arc?: number;
+  },
+) {
+  const { r, h } = props;
+  return (
+    <Part {...props}>
+      <cylinderGeometry
+        args={[
+          props.top ?? r,
+          r,
+          h,
+          props.seg ?? 10,
+          1,
+          false,
+          props.from ?? 0,
+          props.arc ?? Math.PI * 2,
+        ]}
+      />
+    </Part>
+  );
+}
+
+export function Cone(props: PartProps & { r: number; h: number; seg?: number }) {
+  return (
+    <Part {...props}>
+      <coneGeometry args={[props.r, props.h, props.seg ?? 8]} />
+    </Part>
+  );
+}
+
+/** A faceted ball. */
+export function Ball(props: PartProps & { r: number; detail?: number }) {
+  return (
+    <Part {...props}>
+      <icosahedronGeometry args={[props.r, props.detail ?? 1]} />
+    </Part>
+  );
+}
+
+/** The top half of a sphere, sitting on its flat side. */
+export function Dome(props: PartProps & { r: number; seg?: number }) {
+  const seg = props.seg ?? 12;
+  return (
+    <Part {...props}>
+      <sphereGeometry args={[props.r, seg, Math.ceil(seg / 3), 0, Math.PI * 2, 0, Math.PI / 2]} />
+    </Part>
+  );
+}
+
+/** A ring lying flat (rotate it to stand it up). */
+export function Ring(props: PartProps & { r: number; tube: number; seg?: number; arc?: number }) {
+  return (
+    <Part {...props} rotation={props.rotation ?? [Math.PI / 2, 0, 0]}>
+      <torusGeometry args={[props.r, props.tube, 6, props.seg ?? 16, props.arc ?? Math.PI * 2]} />
+    </Part>
+  );
+}
+
+/** A flat shape (`points` in x, y) given `depth` along z, centred on z. Pass a constant or
+ * memoised `points` array: a new array rebuilds the geometry. */
+export function Extruded(
+  props: PartProps & { points: ReadonlyArray<readonly [x: number, y: number]>; depth: number },
+) {
+  const { points, depth } = props;
+  const args = useMemo(() => {
+    const shape = new Shape();
+    points.forEach(([x, y], i) => (i === 0 ? shape.moveTo(x, y) : shape.lineTo(x, y)));
+    shape.closePath();
+    return [shape, { depth, bevelEnabled: false }] as const;
+  }, [points, depth]);
+  return (
+    <group position={props.position} rotation={props.rotation} scale={props.scale}>
+      <Part {...props} position={[0, 0, -depth / 2]} rotation={undefined} scale={undefined}>
+        <extrudeGeometry args={args} />
+      </Part>
+    </group>
+  );
+}
+
+/** A pitched roof: a triangle `w` wide and `h` high, running `d` deep along z. Its
+ * base sits at the given position. */
+export function Gable(props: PartProps & { w: number; h: number; d: number }) {
+  const { w, h, d } = props;
+  const points = useMemo(
+    () =>
+      [
+        [-w / 2, 0],
+        [w / 2, 0],
+        [0, h],
+      ] as const,
+    [w, h],
+  );
+  return <Extruded {...props} points={points} depth={d} />;
+}
+
+/** A lit window: a thin glowing pane. Faces +z unless rotated. */
+export function Win(props: Placed & { w?: number; h?: number; color?: string }) {
+  return (
+    <Box
+      position={props.position}
+      rotation={props.rotation}
+      size={[props.w ?? 0.32, props.h ?? 0.38, 0.05]}
+      color={props.color ?? LAMP}
+      glow={0.9}
+      sharp
+      shadow={false}
+    />
+  );
+}
+
+/** A door in the accent colour, standing on the ground. Faces +z unless rotated. */
+export function Door(props: Placed & { w?: number; h?: number; color?: string }) {
+  const { accent } = useKit().theme;
+  const h = props.h ?? 0.62;
+  const [x, y, z] = props.position ?? [0, 0, 0];
+  return (
+    <Box
+      position={[x, y + h / 2, z]}
+      rotation={props.rotation}
+      size={[props.w ?? 0.4, h, 0.06]}
+      color={props.color ?? accent}
+      sharp
+    />
+  );
+}
+
+/** A low slab under a building, in the theme's wall colour. */
+export function Plinth(props: { w: number; d: number; color?: string }) {
+  const { base } = useKit().theme;
+  return (
+    <Box position={[0, 0.06, 0]} size={[props.w, 0.12, props.d]} color={props.color ?? base} />
+  );
+}
+
+/** Draws `text` centred on a transparent canvas, shrinking it to fit. No font files:
+ * the browser's own rounded or system font. */
+function drawLabel(text: string, aspect: number, ink: string): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
+  canvas.width = 512;
+  canvas.height = Math.max(32, Math.round(512 / aspect));
+  const context = canvas.getContext("2d");
+  if (!context) return canvas;
+  let size = canvas.height * 0.62;
+  const font = (px: number) => `700 ${px}px ui-rounded, "SF Pro Rounded", system-ui, sans-serif`;
+  context.font = font(size);
+  while (size > 10 && context.measureText(text).width > canvas.width * 0.9) {
+    size -= 2;
+    context.font = font(size);
+  }
+  context.fillStyle = ink;
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.fillText(text, canvas.width / 2, canvas.height / 2 + size * 0.04);
+  return canvas;
+}
+
+/** Text painted on a plane facing +z (a canvas texture, not 3D text). Unlit, so the
+ * letters keep their colour at night. */
+export function PaintedText(props: Placed & { text: string; w: number; h: number; ink: string }) {
+  const { w, h, text, ink } = props;
+  const { stage } = useKit();
+  const canvas = useMemo(() => drawLabel(text, w / h, ink), [text, w, h, ink]);
+  return (
+    <mesh position={props.position} rotation={props.rotation} scale={props.scale}>
+      <planeGeometry args={[w, h]} />
+      <meshBasicMaterial transparent opacity={stage === "preview" ? 0.45 : 1} depthWrite={false}>
+        <canvasTexture attach="map" args={[canvas]} colorSpace={SRGBColorSpace} />
+      </meshBasicMaterial>
+    </mesh>
+  );
+}
+
+/** A board with a painted label on both faces. */
+export function LabelBoard(
+  props: Placed & { text: string; w: number; h: number; color: string; ink: string },
+) {
+  const { w, h, text, ink } = props;
+  return (
+    <group position={props.position} rotation={props.rotation} scale={props.scale}>
+      <Box size={[w, h, 0.1]} color={props.color} />
+      <PaintedText position={[0, 0, 0.051]} text={text} w={w * 0.94} h={h * 0.86} ink={ink} />
+      <PaintedText
+        position={[0, 0, -0.051]}
+        rotation={[0, Math.PI, 0]}
+        text={text}
+        w={w * 0.94}
+        h={h * 0.86}
+        ink={ink}
+      />
+    </group>
+  );
+}
+
+/** Turns its children round an axis, forever. */
+export function Spin(
+  props: Placed & { speed?: number; axis?: "x" | "y" | "z"; children: ReactNode },
+) {
+  const ref = useRef<Group>(null);
+  const axis = props.axis ?? "y";
+  const speed = props.speed ?? 1;
+  useFrame((_, delta) => {
+    if (ref.current) ref.current.rotation[axis] += delta * speed;
+  });
+  return (
+    <group position={props.position} rotation={props.rotation}>
+      <group ref={ref}>{props.children}</group>
+    </group>
+  );
+}
+
+/** Rocks its children back and forth: a bob along an axis, or a sway round one. */
+export function Wobble(
+  props: Placed & {
+    kind: "bob" | "sway";
+    axis?: "x" | "y" | "z";
+    amount?: number;
+    speed?: number;
+    phase?: number;
+    children: ReactNode;
+  },
+) {
+  const ref = useRef<Group>(null);
+  const { kind, amount = 0.1, speed = 1.5, phase = 0 } = props;
+  const axis = props.axis ?? (kind === "bob" ? "y" : "z");
+  useFrame(({ clock }) => {
+    if (!ref.current) return;
+    const offset = Math.sin(clock.elapsedTime * speed + phase) * amount;
+    if (kind === "bob") ref.current.position[axis] = offset;
+    else ref.current.rotation[axis] = offset;
+  });
+  return (
+    <group position={props.position} rotation={props.rotation}>
+      <group ref={ref}>{props.children}</group>
+    </group>
+  );
+}
+
+/** Puffs of smoke rising from a chimney and fading. */
+export function Smoke(props: Placed) {
+  const puffs = useRef<Array<Group | null>>([]);
+  const materials = useRef<Array<MeshStandardMaterial | null>>([]);
+  const { stage } = useKit();
+  useFrame(({ clock }) => {
+    for (let i = 0; i < 3; i++) {
+      const t = (clock.elapsedTime * 0.35 + i / 3) % 1;
+      const puff = puffs.current[i];
+      const material = materials.current[i];
+      if (!puff || !material) continue;
+      puff.position.set(Math.sin(t * 4 + i) * 0.08, t * 1.1, 0);
+      puff.scale.setScalar(0.4 + t * 0.9);
+      material.opacity = (stage === "preview" ? 0.25 : 0.55) * (1 - t);
+    }
+  });
+  return (
+    <group position={props.position}>
+      {[0, 1, 2].map((i) => (
+        <group key={i} ref={(g) => void (puffs.current[i] = g)}>
+          <mesh>
+            <icosahedronGeometry args={[0.14, 0]} />
+            <meshStandardMaterial
+              ref={(m) => void (materials.current[i] = m)}
+              color="#d7dae6"
+              flatShading
+              transparent
+              depthWrite={false}
+            />
+          </mesh>
+        </group>
+      ))}
+    </group>
+  );
+}
+
+/** A small light that blinks on and off. */
+export function Blinker(
+  props: Placed & { color: string; size?: number; period?: number; phase?: number },
+) {
+  const material = useRef<MeshStandardMaterial>(null);
+  const { stage } = useKit();
+  const { period = 1.6, phase = 0 } = props;
+  useFrame(({ clock }) => {
+    if (material.current)
+      material.current.emissiveIntensity =
+        ((clock.elapsedTime + phase) % period) / period < 0.5 ? 1.6 : 0.15;
+  });
+  const size = props.size ?? 0.06;
+  return (
+    <mesh position={props.position} rotation={props.rotation}>
+      <boxGeometry args={[size, size, size * 0.5]} />
+      <meshStandardMaterial
+        ref={material}
+        color={props.color}
+        emissive={props.color}
+        flatShading
+        transparent={stage === "preview"}
+        opacity={stage === "preview" ? 0.45 : 1}
+      />
+    </mesh>
+  );
+}

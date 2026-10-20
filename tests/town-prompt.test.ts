@@ -6,6 +6,7 @@ import { expect, test } from "vite-plus/test";
 import { fillBootstrapPrompt } from "../src/prompt.ts";
 import { TOWN_PROMPT } from "../src/town-prompt.ts";
 import { SLOTS } from "../src/town/catalog.ts";
+import { UI_KEYS } from "../ui/src/logic.ts";
 
 const facts = {
   projectDir: "/tmp/my-app",
@@ -26,6 +27,10 @@ test("TOWN.md names every slot and option id in the catalog", () => {
     expect(TOWN_PROMPT).toContain(`\`${slot.id}\``);
     for (const option of slot.options) expect(TOWN_PROMPT).toContain(`\`${option.id}\``);
   }
+});
+
+test("TOWN.md documents every key of the ui styling answer", () => {
+  for (const key of UI_KEYS) expect(TOWN_PROMPT).toContain(`"${key}:`);
 });
 
 test("town mode appends the section; terminal mode doesn't", () => {

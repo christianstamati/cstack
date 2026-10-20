@@ -65,7 +65,8 @@ function createServer(store: TownStore): McpServer {
     {
       description:
         "Report an answer you settled without asking (a preset, a forced choice, a skipped " +
-        'question), with the reason. For a slot that does not apply, pass optionIds: [] and labels: ["Not needed"].',
+        'question), with the reason. For a slot that does not apply, pass optionIds: [] and labels: ["Not needed"]. ' +
+        'For slot "ui", pass one "key:value" id per styling setting (e.g. "theme:blue"), as the prompt describes.',
       inputSchema: z.strictObject({
         slot,
         optionIds: z.array(z.string()),

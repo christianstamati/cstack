@@ -15,10 +15,7 @@ answer drops a building into it. The \`cstack\` MCP server gives you the tools t
 
 2. **Use the slot and option ids below.** Pass the \`slot\` the question fills and option
    ids from its row. Pass \`slot: null\` for a question that isn't a stack choice. Set
-   \`freeText: true\` for the project name and for preset codes. The \`ui\` slot is
-   answered with styling details instead of options: send them with \`slot: "ui"\`
-   (the exact encoding is defined in a later version of this section; until then describe
-   the choice in the question).
+   \`freeText: true\` for the project name and for preset codes.
 
    | Slot             | Option ids                                                            |
    | ---------------- | --------------------------------------------------------------------- |
@@ -34,8 +31,19 @@ answer drops a building into it. The \`cstack\` MCP server gives you the tools t
    | \`dbHost\`         | \`neon\`, \`supabase\`, \`aws\`, \`planetscale\`, \`turso\`, \`atlas\`, \`local\`   |
    | \`auth\`           | \`none\`, \`better-auth\`, \`clerk\`, \`workos\`, \`convex-auth-v2\`, \`payload\` |
    | \`authMethods\`    | \`google\`, \`github\`, \`password\`, \`magic-link\`                          |
-   | \`ui\`             | none (styling details)                                                |
+   | \`ui\`             | \`key:value\` styling ids, through \`decide\` (see below)                 |
    | \`extras\`         | \`example\`, \`ci\`, \`env\`, \`tests\`, \`agent-docs\`                         |
+
+   The \`ui\` slot has no fixed options. Ask the styling questions (Q12a, Q12b, a preset
+   code) with \`slot: null\`. Once the styling is settled (the defaults, a decoded preset,
+   or the user's answers), call \`decide\` once with \`slot: "ui"\`, one \`key:value\` option id
+   per setting and one label per id, for example \`optionIds: ["style:vega",
+   "baseColor:neutral", "theme:blue", "iconLibrary:lucide", "font:inter",
+   "radius:0.625"]\` and \`labels: ["Vega", "Neutral", "Blue", "Lucide", "Inter",
+   "0.625rem"]\`. The keys are \`style\`, \`baseColor\`, \`theme\`, \`iconLibrary\`, \`font\` and
+   \`radius\`. Values are the shadcn CLI's ids, and \`radius\` is in rem without the unit.
+   Leave out a key you don't know. The town repaints itself from \`baseColor\`, \`theme\`
+   and \`radius\`.
 
 3. **Keep the text short.** Option labels are at most 24 characters and descriptions fit
    on one line. You may add a \`quip\`: one short funny line, never mocking the user.

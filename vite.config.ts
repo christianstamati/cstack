@@ -7,6 +7,9 @@ export default defineConfig({
     platform: "node",
     target: "node20",
   },
+  // For the page's tests: @react-three/fiber has no `exports` map, so Node would load its
+  // CommonJS build, which `require`s three (deprecated). Prefer its ES module.
+  ssr: { resolve: { mainFields: ["module", "main"] } },
   staged: {
     "*": "vp check --fix",
   },
