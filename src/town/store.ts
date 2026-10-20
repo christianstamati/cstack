@@ -40,8 +40,7 @@ export class TownStore {
   private readonly queue: QueuedQuestion[] = [];
   private pendingPlan: PendingPlan | null = null;
   private readonly listeners = new Set<(state: TownState) => void>();
-  /** The seq the next newly placed slot gets, and the next block nobody has had. */
-  private nextSeq = 0;
+  /** The next block nobody has had. */
   private nextLot = 0;
 
   constructor(
@@ -120,7 +119,7 @@ export class TownStore {
       labels: input.labels,
       auto: true,
       reason: input.reason,
-      ...this.order(input.slot, input.optionIds),
+      lot: this.lotFor(input.slot, input.optionIds),
     };
     this.emit();
   }
@@ -217,7 +216,7 @@ export class TownStore {
         optionIds,
         labels,
         auto: false,
-        ...this.order(question.slot, optionIds),
+        lot: this.lotFor(question.slot, optionIds),
       };
       this.state.placements[question.slot] = placement;
     }
@@ -228,16 +227,11 @@ export class TownStore {
     return "ok";
   }
 
-  /** The slot's seq and block for a new answer. A re-answer keeps its seq, unless it
-   * gains a building (a fresh seq). A building gets the block the slot already had, else the
-   * next block nobody has had; a slot keeps its block when it turns "not needed". */
-  private order(slot: SlotId, optionIds: string[]): { seq: number; lot: number | null } {
+  /** The slot's block for a new answer: a building gets the block the slot already had,
+   * else the next block nobody has had; a slot keeps its block when it turns "not needed". */
+  private lotFor(slot: SlotId, optionIds: string[]): number | null {
     const previous = this.state.placements[slot];
-    const real = takesLot(slot, optionIds);
-    const gained = real && !(previous && takesLot(slot, previous.optionIds));
-    const seq = previous && !gained ? previous.seq : this.nextSeq++;
-    const lot = previous?.lot ?? (real ? this.nextLot++ : null);
-    return { seq, lot };
+    return previous?.lot ?? (takesLot(slot, optionIds) ? this.nextLot++ : null);
   }
 
   agentStopped(): void {

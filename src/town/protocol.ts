@@ -27,9 +27,6 @@ export interface Placement {
   /** True when the agent settled this without asking. */
   auto: boolean;
   reason?: string;
-  /** The order slots were placed in (0, 1, 2, …). Re-answering keeps it; a slot that
-   * gains a building (from nothing or "not needed") gets a fresh one. */
-  seq: number;
   /** The town block this slot was given (0 = the central one, then outward), or null if it
    * never had one. Set by the store, never handed out twice, and kept when the slot turns
    * "not needed" (the block stays, empty), so nothing ever moves. */

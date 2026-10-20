@@ -28,7 +28,7 @@ import {
 type Placements = Partial<Record<SlotId, Placement>>;
 
 /** A town where the agent decided these slots in this order, each with its first option
- * (the ones in `skip` as "not needed"). Built by the real store, so seq and lot are its. */
+ * (the ones in `skip` as "not needed"). Built by the real store, so the lots are its. */
 function town(slots: SlotId[], skip: SlotId[] = []): TownStore {
   const store = new TownStore("t");
   for (const id of slots) decide(store, id, skip.includes(id));
@@ -113,7 +113,7 @@ test("buildings take blocks in the order they are placed, from the centre out", 
   const reversed = assignBlocks(placed("frontend", "toolchain", "structure"));
   expect(reversed.frontend).toEqual(SPIRAL[0]);
   expect(reversed.structure).toEqual(SPIRAL[2]);
-  // Every lot slot of the whole interview gets its own block, in seq order.
+  // Every lot slot of the whole interview gets its own block, in answer order.
   const all = assignBlocks(ALL);
   const order = SLOTS.filter((s) => LOT_SLOTS.includes(s.id)).map((s) => all[s.id]);
   expect(order).toEqual(SPIRAL.slice(0, order.length));

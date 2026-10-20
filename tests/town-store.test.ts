@@ -121,28 +121,8 @@ test("decide accepts an empty optionIds for slots that do not apply", () => {
     labels: ["Not needed"],
     auto: true,
     reason: "No database",
-    seq: 0,
     lot: null,
   });
-});
-
-test("each newly placed slot gets the next seq; re-answering keeps it", async () => {
-  const store = new TownStore("my-app");
-  store.decide({ slot: "name", optionIds: [], labels: ["shop"], reason: "x" });
-  store.decide({ slot: "structure", optionIds: ["single"], labels: ["Single"], reason: "x" });
-  const asked = store.ask(frontendQ);
-  store.answer({ questionId: store.getState().pending!.id, optionIds: ["nextjs"] });
-  await asked;
-  const seqs = () =>
-    Object.fromEntries(Object.values(store.getState().placements).map((p) => [p.slot, p.seq]));
-  expect(seqs()).toEqual({ name: 0, structure: 1, frontend: 2 });
-  // Re-answered by the page and by the agent: same seq.
-  const again = store.ask(frontendQ);
-  store.answer({ questionId: store.getState().pending!.id, optionIds: ["tanstack-start"] });
-  await again;
-  store.decide({ slot: "structure", optionIds: ["monorepo"], labels: ["Monorepo"], reason: "y" });
-  store.decide({ slot: "deploy", optionIds: ["vercel"], labels: ["Vercel"], reason: "z" });
-  expect(seqs()).toEqual({ name: 0, structure: 1, frontend: 2, deploy: 3 });
 });
 
 test("plan moves to the plan phase and returns build or change", async () => {
@@ -331,7 +311,6 @@ test("real buildings get the next lot; lots never move or get handed out twice",
   ) => store.decide({ slot, optionIds: ids, labels: ids, reason: "x" });
   const lots = () =>
     Object.fromEntries(Object.values(store.getState().placements).map((p) => [p.slot, p.lot]));
-  const seqOf = (slot: "api" | "frontend") => store.getState().placements[slot]!.seq;
   decide("name", []);
   decide("structure", ["single"]);
   decide("toolchain", ["vite-plus"]);
@@ -347,15 +326,12 @@ test("real buildings get the next lot; lots never move or get handed out twice",
     frontend: 2,
     ui: null,
   });
-  // Not needed → real: the next lot, a fresh seq; nobody else moves.
-  const before = seqOf("frontend");
+  // Not needed → real: the next lot; nobody else moves.
   decide("api", ["hono"]);
   expect(lots()).toEqual({ name: null, structure: 0, toolchain: 1, api: 3, frontend: 2, ui: null });
-  expect(seqOf("api")).toBeGreaterThan(before);
-  // Real → real keeps the lot and the seq.
+  // Real → real keeps the lot.
   decide("frontend", ["tanstack-start"]);
   expect(lots().frontend).toBe(2);
-  expect(seqOf("frontend")).toBe(before);
   // Real → not needed: its block stays (empty), still reserved; nobody else moves.
   decide("toolchain", []);
   expect(lots()).toEqual({ name: null, structure: 0, toolchain: 1, api: 3, frontend: 2, ui: null });

@@ -68,7 +68,6 @@ function uiPlacement(settings: Record<string, string>): Placement {
     optionIds: Object.entries(settings).map(([key, value]) => `${key}:${value}`),
     labels: Object.values(settings),
     auto: true,
-    seq: 0,
     lot: null,
   };
 }
@@ -78,18 +77,19 @@ function placement(
   optionIds: string[],
   labels: string[],
   auto = false,
-  seq = 0,
-  lot = takesLot(slot, optionIds) ? seq : null,
+  /** Its place in the answer order, which is its block if it takes one. */
+  order = 0,
+  lot = takesLot(slot, optionIds) ? order : null,
 ): Placement {
-  return { slot, optionIds, labels, auto, seq, lot };
+  return { slot, optionIds, labels, auto, lot };
 }
 
 /** Every slot placed with its first option, in the interview's order. */
 function everything(): TownState["placements"] {
   const placements: TownState["placements"] = {};
-  SLOTS.forEach((slot, seq) => {
+  SLOTS.forEach((slot, order) => {
     const option = slot.options[0];
-    placements[slot.id] = placement(slot.id, option ? [option.id] : [], ["x"], false, seq);
+    placements[slot.id] = placement(slot.id, option ? [option.id] : [], ["x"], false, order);
   });
   return placements;
 }
@@ -452,8 +452,8 @@ test("the crane waits by the entrance for the name, then on the next free block"
 
 test("with every building settled the crane goes to the fountain, then away", () => {
   const placements: TownState["placements"] = {};
-  SLOTS.forEach((slot, seq) => {
-    if (slot.id !== "ui") placements[slot.id] = placement(slot.id, [], ["Not needed"], true, seq);
+  SLOTS.forEach((slot, order) => {
+    if (slot.id !== "ui") placements[slot.id] = placement(slot.id, [], ["Not needed"], true, order);
   });
   placements.name = placement("name", [], ["shop"], false, 0);
   expect(nextLot(stateAt({ placements }))).toEqual(FOUNTAIN_SPOT);
