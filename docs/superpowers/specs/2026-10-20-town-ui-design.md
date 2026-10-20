@@ -265,3 +265,28 @@ time. The README, `CLAUDE.md` and the prompt's references to `create-cstack` /
 - **A quip per question**, written by the agent, to make the billboard funny.
 - **"Change something"** on the plan works by clicking the building to re-answer.
 - **Desktop only** for the first version.
+
+## Changes during implementation
+
+The rest of this document is the original design and stays as the record. The built town
+differs from it in these ways, mostly at the user's request while it was being built:
+
+- **A city instead of an island.** The town is a pastel low-poly city on a floating slab,
+  not a small island.
+- **Pastel day plus a day/night cycle instead of night only.** The sky follows the local
+  clock; `&time=HH:MM` in the page address previews an hour. The finale lights up the
+  town at night or celebrates in daylight.
+- **Logos on the buildings.** Each building carries its tool's logo from Simple Icons
+  (trademarks of their owners, credited in the README and on the page). Tools without an
+  icon get a monogram badge.
+- **Links as street traffic.** Connections between pieces show as glowing traffic along
+  the streets instead of separate props.
+- **Growth from the centre, in answer order.** The town starts as bare land with the name
+  sign and grows outward from the centre; roads are paved as blocks are added and cars
+  appear once two blocks connect.
+- **Block assignment follows answer order.** A slot gets the next free block when it first
+  gains a building and keeps it for the whole session, even if it later flips to "not
+  needed" (the block stays, empty), so nothing moves.
+- **Plan, build and report in the town.** The plan card (Build it / Change something),
+  build stages (blueprint, constructing, solid or failed), and a report card with copy
+  buttons and manual-step signs.
