@@ -1,44 +1,53 @@
 {
-  "name": "cstack",
-  "version": "0.0.0",
-  "private": true,
-  "type": "module",
-  "bin": {
-    "create-cstack-app": "cli/src/index.ts"
-  },
-  "packageManager": "bun@1.4.2",
-  "workspaces": [
-    "apps/*",
-    "packages/*",
-    "cli"
+  "name": "@cstack-dev/create",
+  "version": "0.1.0",
+  "description": "Bootstrap a full-stack TypeScript project with Claude Code or Codex",
+  "keywords": [
+    "claude-code",
+    "cli",
+    "codex",
+    "create",
+    "scaffold",
+    "typescript"
   ],
-  "catalog": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@1.1.0",
-    "vite-plus": "1.1.0"
+  "homepage": "https://github.com/christianstamati/cstack#readme",
+  "bugs": {
+    "url": "https://github.com/christianstamati/cstack/issues"
   },
-  "overrides": {
-    "vite": "catalog:"
+  "author": "Christian Stamati",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/christianstamati/cstack.git"
+  },
+  "bin": {
+    "create-cstack": "dist/index.mjs"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
-    "dev": "vp run -r --parallel dev",
-    "build": "vp run -r build",
-    "test": "vp run -r --cache test",
+    "build": "vp pack",
     "check": "vp check",
-    "check:fix": "vp check --fix",
-    "ci": "vp check && vp run test",
-    "ui:add": "cd apps/web && bunx shadcn@latest add",
-    "prepare": "vp config --no-agent"
-  },
-  "dependencies": {
-    "@clack/prompts": "^1.8.1"
+    "test": "vp test",
+    "sync-prompt": "bun scripts/sync-prompt.ts",
+    "ready": "vp check && vp test && vp pack",
+    "prepublishOnly": "vp check && vp test && vp pack",
+    "prepare": "vp config"
   },
   "devDependencies": {
-    "@shadcn/lint": "^0.2.0",
-    "typescript": "^7.0.2",
-    "vite": "catalog:",
-    "vite-plus": "catalog:"
+    "@types/bun": "^1.4.3",
+    "vite": "npm:@voidzero-dev/vite-plus-core@1.2.0",
+    "vite-plus": "1.2.0"
+  },
+  "overrides": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@1.2.0"
   },
   "engines": {
-    "node": "^22.18.0 || ^24.11.0 || >=26.0.0"
-  }
+    "node": ">=20.12.0"
+  },
+  "packageManager": "bun@1.4.3"
 }

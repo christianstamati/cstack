@@ -1,55 +1,40 @@
-# Project conventions
+<!--VITE PLUS START-->
 
-Bun workspaces monorepo on [Vite+](https://viteplus.dev) (`vp`). See README.md for commands and deployment.
+# Using Vite+, the Unified Toolchain for the Web
 
-- `apps/web`: TanStack Start (React 19), file routes in `src/routes`
-- `packages/backend`: Convex functions in `convex/`, imported by the web app as `@workspace/backend/api`
-- `packages/ui`: shadcn/ui components (Base UI primitives, Tailwind CSS 4), imported as `@workspace/ui/components/<name>`
+This project is using Vite+, a unified toolchain built on top of Vite, Rolldown, Vitest, tsdown, Oxlint, Oxfmt, and Vite Task. Vite+ wraps runtime management, package management, and frontend tooling in a single global CLI called `vp`. Vite+ is distinct from Vite, and it invokes Vite through `vp dev` and `vp build`. Run `vp help` to print a list of commands and `vp <command> --help` for information about a specific command.
 
-Before finishing a change, run `bun run check:fix` and `bun run test`, and fix every error.
+Docs are local at `node_modules/vite-plus/docs` or online at https://viteplus.dev/guide/.
 
-## Backend (Convex)
+## Built-in Commands vs Scripts
 
-- Every public or internal function declares `args` and `returns` validators. Use `doc(schema, "table")` from `convex-helpers/validators` for document return types.
-- Query with indexes (`withIndex`), never `filter` over a whole table.
-- Get the caller with `getAuthUserId(ctx)` from `@convex-dev/auth/core` (returns the `users` id or null), or `requireUserId(ctx)` from `convex/lib/auth.ts`. Check ownership before reading or writing another user's documents.
-- Throw `ConvexError("message")` for errors the user should see; other errors are redacted in production.
-- Queries that the UI subscribes to return an empty value for signed-out callers instead of throwing.
-- Test with convex-test: `setup()` and `signedInAs(t, email)` from `convex/test.setup.ts`. Test files are `*.test.ts` next to the code.
-- Deployment env vars are validated in `convex/convex.config.ts`. Add new required ones there.
-- Auth is Convex Auth v2 (alpha, no written docs yet). The API reference is the examples at https://github.com/get-convex/convex-auth/tree/v2.0.0-alpha.2/examples.
+`vp <name>` runs a built-in command. `vp run <name>` runs a `package.json` script or a `vite.config.ts` task. Scripts cannot overwrite built-ins, so `vp dev` and `vp run dev` may do different things. Check `package.json` and `vite.config.ts` first, and run `vp run <name>` when the project defines a script or task with that name.
 
-## Web
+## Tool Versions
 
-- Read data with `useSuspenseQuery(convexQuery(api.module.fn, args))` or `useQuery(...)`: these are live subscriptions.
-- Write with `useMutation({ mutationFn: useConvexMutation(api.module.fn), onError: toastError })` (`toastError` is in `@/lib/errors`).
-- Confirm creates and deletes with a short `toast.success("Task added")`. Put the callback on `useMutation` when the component unmounts on success (a deleted row), since `mutate()` callbacks don't run after unmount.
-- Show empty states (no data, not found) with `Empty` from `@workspace/ui/components/empty`.
-- Routes under `src/routes/_authed/` require a signed-in user and render on the client only (the session lives in the browser).
-- Add UI components with `bun run ui:add <name>` rather than writing them by hand. Files in `packages/ui/src/components` are vendored from shadcn; keep edits minimal.
-- Import app code with the `@/` alias (`apps/web/src`).
+Run `vp toolchain` to show versions and relationships in the active Vite+
+release. Add a tool name to select part of the graph. For example, run
+`vp toolchain vite`. Use `--global` to ignore the local `vite-plus` package. Use
+`vp why <package>` to show the package-manager dependency graph.
 
-### Components
+## Review Checklist
 
-- One component per file in `apps/web/src/components/<feature>/`, and the file is named after the component in PascalCase: `TaskList.tsx` exports `TaskList`. Oxlint enforces the file names. Feature folders are lowercase (`tasks`, `auth`, `layout`).
-- Name components after what they render: `TaskList` renders tasks, `AddTaskForm` adds one, `InvoiceTable` renders a table.
-- Components fetch their own data and own their mutations, so a page doesn't pass query results or callbacks down.
-- Route files in `src/routes` keep route config (search params, `head`, `ssr`) and a page component that only lays out feature components.
-- shadcn primitives in `packages/ui` keep their kebab-case names.
+- [ ] Run `vp install` after pulling remote changes and before getting started.
+- [ ] Run `vp check` and `vp test` to format, lint, type check and test changes.
+- [ ] Check if there are `vite.config.ts` tasks or `package.json` scripts necessary for validation, run via `vp run <script>`.
+- [ ] If setup, runtime, or package-manager behavior looks wrong, run `vp env doctor` and include its output when asking for help.
 
-## Design system
+<!--VITE PLUS END-->
 
-`bun run check` runs [@shadcn/lint](https://github.com/shadcn-ui/lint) through Oxlint (the `lint` block in the root `vite.config.ts`) to keep the UI consistent. Fix what it reports instead of silencing it; its messages name the variant, size or token to use.
+# This repo
 
-- Style a component through its props (`variant`, `size`), not `className`. Call sites may only add layout classes (margin, width, flex, position). `Card`, and any component whose name ends in `Content`, `Header` or `Footer` (`CardContent`, `DialogFooter`), also accepts spacing.
-- Colors come from theme tokens (`bg-primary`, `text-muted-foreground`), never the Tailwind palette (`bg-zinc-100`).
-- No arbitrary values (`p-[13px]`, `w-[420px]`). Use the scale (`p-3.25`, `w-105`).
-- No inline `style`, and no class strings built at runtime on components.
-- When a design needs a look no variant provides, add a variant (or a token in `packages/ui/src/styles/globals.css`) and call it out as a design decision. Changing the policy in `vite.config.ts` is also a design decision.
+This repo is only the `create-cstack` CLI, published to npm and run with
+`npx @cstack-dev/create <dir>`. Plain TypeScript with no runtime dependencies; `vp pack`
+bundles `src/index.ts` into `dist/index.mjs`, the published bin, which runs on Node.
 
-## Tooling
-
-- TypeScript 7: `tsc` is the Go-based compiler. There is no TypeScript JS API, so avoid tools that need one.
-- Vite+ replaces Turborepo, Biome and lefthook. `vp check` formats with Oxfmt, lints with Oxlint and type-checks every package with tsgolint (TypeScript 7, each package's own tsconfig); its config is the `fmt` and `lint` blocks of the root `vite.config.ts`. `vp run -r` runs package scripts in dependency order. A pre-commit hook in `.vite-hooks/` runs `vp staged`.
-- Import Vite and Vitest APIs from `vite-plus` and `vite-plus/test`, not `vite` or `vitest`. `vite` and `vite-plus` versions come from the `catalog` in the root `package.json`; keep them in step.
-- Generated files, don't edit: `apps/web/src/routeTree.gen.ts`, `packages/backend/convex/_generated/`.
+- The bootstrap prompt is `.github/BOOTSTRAP.md`. Edit that file, then run
+  `bun run sync-prompt` to regenerate `src/bootstrap-prompt.ts`. Never edit the
+  generated file by hand.
+- Placeholders in the prompt (`{{PROJECT_DIR}}`, etc.) are filled by
+  `fillBootstrapPrompt` in `src/prompt.ts`; a new placeholder needs a value there.
+- The "cstack defaults" JSON in the prompt must match `defaultConfig` in `src/prompt.ts`.
