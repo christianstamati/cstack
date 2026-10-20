@@ -21,6 +21,12 @@ test("town flags", () => {
   ).toMatchObject({ terminal: true, open: false, askEverything: true });
 });
 
+test("negated flags other than --no-open are usage errors", () => {
+  expect(() => parseCliArgs(["create", "a", "--no-terminal"])).toThrow(UsageError);
+  expect(() => parseCliArgs(["create", "a", "--no-defaults"])).toThrow(UsageError);
+  expect(() => parseCliArgs(["create", "a", "--no-open"]).open).not.toThrow();
+});
+
 test("no command or --help prints help", () => {
   expect(parseCliArgs([]).command).toBe("help");
   expect(parseCliArgs(["--help"]).command).toBe("help");

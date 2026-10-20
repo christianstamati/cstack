@@ -58,7 +58,6 @@ export function parseCliArgs(argv: ReadonlyArray<string>): CliOptions {
     parsed = parseArgs({
       args: [...own],
       allowPositionals: true,
-      allowNegative: true,
       strict: true,
       options: {
         agent: { type: "string" },
@@ -66,7 +65,7 @@ export function parseCliArgs(argv: ReadonlyArray<string>): CliOptions {
         config: { type: "string" },
         defaults: { type: "boolean", default: false },
         terminal: { type: "boolean", default: false },
-        open: { type: "boolean", default: true },
+        "no-open": { type: "boolean", default: false },
         "ask-everything": { type: "boolean", default: false },
         help: { type: "boolean", short: "h", default: false },
       },
@@ -111,7 +110,7 @@ export function parseCliArgs(argv: ReadonlyArray<string>): CliOptions {
     config: values.config,
     defaults: values.defaults,
     terminal: values.terminal,
-    open: values.open,
+    open: !values["no-open"],
     askEverything: values["ask-everything"],
     agentArgs,
   };
