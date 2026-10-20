@@ -13,7 +13,7 @@ const DURATION_MS = 600;
 const IMPACT = 0.55;
 const DUST_MS = 450;
 
-function prefersReducedMotion(): boolean {
+export function prefersReducedMotion(): boolean {
   try {
     return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   } catch {

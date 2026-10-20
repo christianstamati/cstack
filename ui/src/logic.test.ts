@@ -1,22 +1,29 @@
 import { expect, test } from "vite-plus/test";
 
 import { SLOTS, type SlotId } from "../../src/town/catalog.ts";
-import type { Placement } from "../../src/town/protocol.ts";
+import type { Placement, Question, TownState } from "../../src/town/protocol.ts";
 import {
   answerOutcome,
   BASE_COLORS,
+  billboardCard,
+  craneSpot,
   decorSpots,
   DEFAULT_THEME,
   dropPose,
   hoverText,
+  isPlanWaiting,
+  isThinking,
   LOT_SIZE,
   ISLAND_RADIUS,
   lotPosition,
   modelKindFor,
+  nextLot,
   projectNameFrom,
   propSpot,
   readMuted,
   reconnectDelay,
+  showTerminalSign,
+  TERMINAL_SIGN_AFTER_MS,
   THEME_COLORS,
   themeFor,
   tokenFrom,
@@ -247,4 +254,114 @@ test("hover text names the slot, the choice and why it was automatic", () => {
     title: "Backend / data: Convex",
     detail: "Picked automatically",
   });
+});
+
+function stateAt(overrides: Partial<TownState> = {}): TownState {
+  return {
+    projectName: "my-app",
+    phase: "interview",
+    placements: {},
+    pending: null,
+    plan: null,
+    steps: [],
+    report: null,
+    status: null,
+    lastAgentActivity: 0,
+    agentStopped: false,
+    ...overrides,
+  };
+}
+
+function question(overrides: Partial<Question> = {}): Question {
+  return {
+    id: "q1",
+    slot: "frontend",
+    question: "Which frontend?",
+    options: [{ id: "nextjs", label: "Next.js" }],
+    multiSelect: false,
+    freeText: false,
+    ...overrides,
+  };
+}
+
+const PLAN = { rows: [], tree: "", generators: [], manualSteps: [] };
+
+test("terminal sign after 30 s of agent silence", () => {
+  expect(TERMINAL_SIGN_AFTER_MS).toBe(30_000);
+  expect(showTerminalSign(stateAt({ lastAgentActivity: 0 }), 30_001)).toBe(true);
+  expect(showTerminalSign(stateAt({ lastAgentActivity: 0 }), 29_000)).toBe(false);
+  expect(showTerminalSign(stateAt({ lastAgentActivity: 0 }), 30_000)).toBe(false);
+  expect(showTerminalSign(stateAt({ lastAgentActivity: 0, pending: question() }), 99_999)).toBe(
+    false,
+  );
+});
+
+test("no terminal sign while the plan waits, after the end, or once the agent stopped", () => {
+  expect(showTerminalSign(stateAt({ phase: "plan", plan: PLAN }), 99_999)).toBe(false);
+  expect(showTerminalSign(stateAt({ phase: "done" }), 99_999)).toBe(false);
+  expect(showTerminalSign(stateAt({ agentStopped: true }), 99_999)).toBe(false);
+  // A long build step with no news: the agent may be waiting on a permission prompt.
+  expect(showTerminalSign(stateAt({ phase: "build", plan: PLAN }), 99_999)).toBe(true);
+  expect(showTerminalSign(stateAt({ lastAgentActivity: 50_000 }), 60_000)).toBe(false);
+});
+
+test("the plan waits only in the plan phase with a plan set", () => {
+  expect(isPlanWaiting(stateAt({ phase: "plan", plan: PLAN }))).toBe(true);
+  expect(isPlanWaiting(stateAt({ phase: "plan" }))).toBe(false);
+  expect(isPlanWaiting(stateAt({ phase: "build", plan: PLAN }))).toBe(false);
+});
+
+test("thinking only between questions in the interview", () => {
+  expect(isThinking(stateAt())).toBe(true);
+  expect(isThinking(stateAt({ pending: question() }))).toBe(false);
+  expect(isThinking(stateAt({ phase: "plan", plan: PLAN }))).toBe(false);
+  expect(isThinking(stateAt({ phase: "build" }))).toBe(false);
+  expect(isThinking(stateAt({ phase: "done" }))).toBe(false);
+  expect(isThinking(stateAt({ agentStopped: true }))).toBe(false);
+});
+
+test("nextLot skips placed slots", () => {
+  expect(nextLot(stateAt())).toBe(SLOTS[0]!.id);
+  const [first, second, third] = SLOTS;
+  const placements: TownState["placements"] = {
+    [first!.id]: placement(first!.id, [], ["shop"]),
+    [second!.id]: placement(second!.id, [second!.options[0]!.id], ["x"]),
+  };
+  expect(nextLot(stateAt({ placements }))).toBe(third!.id);
+});
+
+test("nextLot skips slots settled as not needed, and is null when every slot is settled", () => {
+  const placements: TownState["placements"] = {};
+  for (const slot of SLOTS)
+    if (slot.id !== "extras") placements[slot.id] = placement(slot.id, [], ["Not needed"], true);
+  expect(nextLot(stateAt({ placements }))).toBe("extras");
+  placements.extras = placement("extras", [], ["Not needed"], true);
+  expect(nextLot(stateAt({ placements }))).toBeNull();
+});
+
+test("the billboard shows the plan over a question, the question otherwise", () => {
+  expect(billboardCard(stateAt())).toBeNull();
+  expect(billboardCard(stateAt({ pending: question() }))).toBe("question");
+  expect(billboardCard(stateAt({ pending: question({ slot: null }) }))).toBe("question");
+  expect(billboardCard(stateAt({ phase: "plan", plan: PLAN, pending: question() }))).toBe("plan");
+  expect(billboardCard(stateAt({ agentStopped: true, pending: question() }))).toBeNull();
+  const report = { built: [], commands: [], manualSteps: [], unverified: [] };
+  expect(billboardCard(stateAt({ phase: "done", report }))).toBe("report");
+  expect(billboardCard(stateAt({ phase: "done", report, agentStopped: true }))).toBe("report");
+});
+
+test("the crane stands just off its lot, on the island, with its jib over the lot", () => {
+  for (const slot of SLOTS) {
+    const { x, z, yaw, reach } = craneSpot(slot.id);
+    for (const other of SLOTS) {
+      const [lx, lz] = other.lot;
+      const outside = Math.max(Math.abs(x - lx), Math.abs(z - lz)) > LOT_SIZE / 2;
+      expect(outside, `${slot.id}'s crane on ${other.id}'s lot`).toBe(true);
+    }
+    expect(Math.hypot(x, z)).toBeLessThan(ISLAND_RADIUS - 1);
+    // The jib points along local +x, turned by `yaw` round y: its hook hangs over the lot.
+    const [lx, lz] = slot.lot;
+    expect(x + Math.cos(yaw) * reach).toBeCloseTo(lx);
+    expect(z - Math.sin(yaw) * reach).toBeCloseTo(lz);
+  }
 });

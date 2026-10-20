@@ -1,14 +1,18 @@
 import { Canvas } from "@react-three/fiber";
 
+import { Billboard } from "./hud/Billboard.tsx";
 import { Credits } from "./hud/Credits.tsx";
 import { Entry } from "./hud/Entry.tsx";
 import { Mute } from "./hud/Mute.tsx";
+import { TerminalSign } from "./hud/TerminalSign.tsx";
 import { Camera } from "./scene/Camera.tsx";
+import { Crane, CraneStatus } from "./scene/Crane.tsx";
 import { HoverLabel, HoverTracker } from "./scene/Hover.tsx";
 import { Island } from "./scene/Island.tsx";
 import { Links } from "./scene/Links.tsx";
 import { Lots } from "./scene/Lots.tsx";
 import { Placements } from "./scene/Placements.tsx";
+import { Preview } from "./scene/Preview.tsx";
 import { Sky } from "./scene/Sky.tsx";
 import { useMusic } from "./use-music.ts";
 import { useTown, type Town } from "./use-town.ts";
@@ -39,12 +43,21 @@ export function App() {
           <>
             <Placements state={town.state} />
             <Links state={town.state} />
+            <Preview state={town.state} />
+            <Crane state={town.state} />
           </>
         ) : null}
         <Camera />
         <HoverTracker />
       </Canvas>
       <HoverLabel />
+      {town.state ? (
+        <>
+          <CraneStatus state={town.state} />
+          <TerminalSign state={town.state} />
+          <Billboard state={town.state} postAnswer={town.postAnswer} />
+        </>
+      ) : null}
       <Entry projectName={town.state?.projectName ?? null} onEnter={music.start} />
       {status ? (
         <div className="hud-pill" role="status">

@@ -180,3 +180,383 @@ body,
     animation: none;
   }
 }
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* The billboard: a lit board with two lamps on top, on two wooden posts that reach down
+   to the ground (the bottom of the page). */
+.billboard {
+  --wood: #6b4a35;
+  --wood-dark: #4a3122;
+  --paper: #fbf0d6;
+  --paper-ink: #2b2116;
+  --paper-soft: #6e5a43;
+  position: fixed;
+  top: 22px;
+  right: 30px;
+  bottom: 0;
+  width: min(390px, calc(100vw - 60px));
+  display: flex;
+  flex-direction: column;
+  pointer-events: none;
+}
+
+.billboard-board {
+  position: relative;
+  max-height: calc(100% - 70px);
+  display: flex;
+  flex-direction: column;
+  border: 9px solid var(--wood);
+  border-radius: 18px;
+  background: var(--paper);
+  color: var(--paper-ink);
+  box-shadow:
+    inset 0 0 0 2px var(--wood-dark),
+    0 0 60px rgb(255 207 122 / 0.28),
+    0 14px 30px rgb(0 0 0 / 0.45);
+  pointer-events: auto;
+  animation: billboard-in 420ms cubic-bezier(0.3, 1.5, 0.6, 1);
+}
+
+.billboard-lamps {
+  display: flex;
+  justify-content: space-around;
+  height: 14px;
+  margin-bottom: -2px;
+}
+
+.billboard-lamps span {
+  width: 34px;
+  height: 14px;
+  border-radius: 8px 8px 3px 3px;
+  background: #3a3f4d;
+  box-shadow: 0 10px 22px 6px rgb(255 217 138 / 0.55);
+  border-bottom: 4px solid var(--lamp);
+}
+
+.billboard-posts {
+  flex: 1;
+  display: flex;
+  justify-content: space-around;
+  min-height: 40px;
+}
+
+.billboard-posts span {
+  width: 16px;
+  margin-top: -2px;
+  background: linear-gradient(90deg, var(--wood-dark), var(--wood) 45%, var(--wood-dark));
+  border-radius: 3px 3px 0 0;
+}
+
+@keyframes billboard-in {
+  from {
+    translate: 0 -24px;
+    opacity: 0;
+  }
+}
+
+.question {
+  display: grid;
+  gap: 10px;
+  padding: 16px 18px 18px;
+  overflow-y: auto;
+}
+
+.question.shake {
+  animation: shake 380ms ease-in-out;
+}
+
+@keyframes shake {
+  20%,
+  60% {
+    translate: -7px 0;
+  }
+  40%,
+  80% {
+    translate: 7px 0;
+  }
+}
+
+.question-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.question-kind {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--wood);
+  color: var(--paper);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.question-hint {
+  font-size: 12px;
+  color: var(--paper-soft);
+}
+
+.question-text {
+  margin: 0;
+  font-size: 21px;
+  line-height: 1.25;
+}
+
+.question-quip {
+  margin: -4px 0 0;
+  font-style: italic;
+  color: var(--paper-soft);
+}
+
+.options {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 2px solid #e2d2ae;
+  border-radius: 12px;
+  background: #fffaf0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    translate 120ms ease,
+    border-color 120ms ease,
+    background 120ms ease;
+}
+
+.option:hover:not(:disabled),
+.option:focus-visible {
+  translate: 0 -2px;
+  border-color: var(--wood);
+  background: #fff3d6;
+  outline: none;
+}
+
+.option.on {
+  border-color: #e8833a;
+  background: #ffe9c7;
+}
+
+.option:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.option-tick {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  border: 2px solid var(--wood);
+  border-radius: 6px;
+  background: #fff;
+}
+
+.option.on .option-tick {
+  border-color: #e8833a;
+  background: #e8833a
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.5l3 3 6-7' fill='none' stroke='white' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+    center / 14px no-repeat;
+}
+
+.option-body {
+  display: grid;
+  gap: 2px;
+}
+
+.option-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+}
+
+.option-recommended {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #d9f2c6;
+  color: #2f5a17;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.option-description {
+  font-size: 13px;
+  color: var(--paper-soft);
+}
+
+.question-free,
+.question-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.question-input {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 12px;
+  border: 2px solid #e2d2ae;
+  border-radius: 12px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+}
+
+.question-input:focus {
+  border-color: var(--wood);
+  outline: none;
+}
+
+.question-actions {
+  justify-content: flex-end;
+}
+
+.question-send {
+  padding: 9px 20px;
+  border: 0;
+  border-radius: 12px;
+  background: #e8833a;
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 3px 0 #b55d1f;
+}
+
+.question-send:hover:not(:disabled) {
+  background: #f0924a;
+}
+
+.question-send:focus-visible {
+  outline: 3px solid var(--wood);
+  outline-offset: 2px;
+}
+
+.question-send:disabled {
+  background: #d8c7a8;
+  box-shadow: 0 3px 0 #b9a687;
+  cursor: default;
+}
+
+.question-problem {
+  margin: 0;
+  font-size: 13px;
+  color: #b3261e;
+}
+
+/* The agent's status line, under the thinking crane. */
+.crane-status {
+  position: fixed;
+  left: 0;
+  top: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.crane-pill {
+  display: block;
+  max-width: 320px;
+  translate: -50% 14px;
+  padding: 7px 14px;
+  border-radius: 14px;
+  background: var(--glass);
+  border: 1px solid rgb(242 182 50 / 0.5);
+  backdrop-filter: blur(6px);
+  font-size: 14px;
+  text-align: center;
+}
+
+/* "The agent needs you in the terminal": a board hanging on two strings, swinging. */
+.terminal-sign {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  translate: -50% 0;
+  padding-top: 46px;
+  pointer-events: none;
+  transform-origin: 50% 0;
+  animation:
+    sign-drop 600ms cubic-bezier(0.3, 1.6, 0.6, 1),
+    sign-swing 3.2s ease-in-out 600ms infinite;
+}
+
+.terminal-sign::before,
+.terminal-sign::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  width: 2px;
+  height: 50px;
+  background: rgb(244 234 210 / 0.5);
+}
+
+.terminal-sign::before {
+  left: 22%;
+}
+
+.terminal-sign::after {
+  right: 22%;
+}
+
+.terminal-board {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 20px;
+  border: 6px solid #6b4a35;
+  border-radius: 14px;
+  background: #2a1d05;
+  color: var(--lamp);
+  font-size: 17px;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow:
+    0 0 28px rgb(255 207 122 / 0.35),
+    0 10px 24px rgb(0 0 0 / 0.45);
+}
+
+@keyframes sign-drop {
+  from {
+    translate: -50% -120px;
+  }
+}
+
+@keyframes sign-swing {
+  25% {
+    rotate: 2deg;
+  }
+  75% {
+    rotate: -2deg;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .billboard-board,
+  .question.shake,
+  .terminal-sign {
+    animation: none;
+  }
+}

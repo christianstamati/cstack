@@ -10,7 +10,7 @@ import type { Placement, TownState } from "../../../src/town/protocol.ts";
 import { LogoSign, logoSignHeight } from "../buildings/Badge.tsx";
 import { Drop } from "../buildings/Drop.tsx";
 import { NotNeeded } from "../buildings/Generic.tsx";
-import { Ball, Box, Cyl } from "../buildings/kit.tsx";
+import { Ball, Box, Cyl, Frame } from "../buildings/kit.tsx";
 import { logoFor } from "../buildings/logos.ts";
 import { buildingFor, propFor } from "../buildings/registry.ts";
 import {
@@ -31,6 +31,11 @@ const STAGE: Stage = "placed";
 const AUTO_FLAG = "#7fe9ff";
 /** Models are drawn a little larger than their lot units, to read well from afar. */
 const MODEL_SCALE = 1.15;
+
+/** Width of a prop's logo sign: sign-in methods share a lot, so theirs are smaller. */
+export function propLogoSize(slot: SlotId): number {
+  return slot === "authMethods" ? 0.5 : 0.7;
+}
 
 /** Turns a model at (x, z) so its front (+z) faces away from the town centre. */
 function facing(x: number, z: number): number {
@@ -61,53 +66,104 @@ function AutoFlag({ y }: { y: number }) {
   );
 }
 
-interface PlacedProps {
-  /** Unique per model, for the hover label. */
-  id: string;
-  at: readonly [x: number, z: number];
-  placement: Placement;
+interface SignedProps {
+  stage: Stage;
+  theme: Theme;
   auto: boolean;
   /** The logo for the sign on its roof, if it has one. */
   logo?: `${SlotId}:${string}`;
   /** Width of that logo, in model units. */
   logoSize?: number;
+  /** Called once with the model's measured height and whether it got a logo sign. */
+  onMeasure?: (height: number, hasSign: boolean) => void;
+  onPointerOver?: (event: ThreeEvent<PointerEvent>) => void;
+  onPointerOut?: (event: ThreeEvent<PointerEvent>) => void;
   children: ReactNode;
 }
 
-/** Drops a model onto its spot and measures it, to stand its logo sign (or the "auto"
- * flag) on its roof and to anchor the hover label above it. */
-function Placed({ id, at, placement, auto, logo, logoSize = 0.95, children }: PlacedProps) {
-  const [x, z] = at;
+/** A model with its logo sign (or the "auto" flag) on its roof. The whole of it, sign
+ * included, is drawn in `stage`'s look: the stage provider wraps the sign too. */
+export function Signed(props: SignedProps) {
+  const { stage, theme, auto, logo, logoSize = 0.95, onMeasure } = props;
   const content = useRef<Group>(null);
   const [height, setHeight] = useState<number | null>(null);
-  useLayoutEffect(() => {
-    if (content.current) setHeight(solidHeight(content.current));
-  }, []);
-  useEffect(() => () => clearHover(id), [id]);
   const [slot, optionId] = logo?.split(":") ?? [];
   const hasSign = slot !== undefined && logoFor(slot as SlotId, optionId ?? "") !== null;
+  useLayoutEffect(() => {
+    if (!content.current) return;
+    const measured = solidHeight(content.current);
+    setHeight(measured);
+    onMeasure?.(measured, hasSign);
+    // Measured once: a new answer remounts the model.
+  }, []);
+  return (
+    <Frame stage={stage} theme={theme}>
+      <group ref={content} onPointerOver={props.onPointerOver} onPointerOut={props.onPointerOut}>
+        {props.children}
+        {logo && hasSign && height !== null ? (
+          <LogoSign of={logo} position={[0, height - 0.05, 0]} size={logoSize} auto={auto} />
+        ) : null}
+      </group>
+      {auto && !hasSign && height !== null ? <AutoFlag y={height} /> : null}
+    </Frame>
+  );
+}
+
+interface PlacedProps {
+  /** Unique per model, for the hover label. */
+  id: string;
+  at: readonly [x: number, z: number];
+  placement: Placement;
+  theme: Theme;
+  auto: boolean;
+  logo?: `${SlotId}:${string}`;
+  logoSize?: number;
+  children: ReactNode;
+}
+
+/** Turns a model on its spot so it faces away from the town centre, at the town's scale. */
+export function OnSpot(props: { at: readonly [x: number, z: number]; children: ReactNode }) {
+  const [x, z] = props.at;
+  return (
+    <group position={[x, 0, z]} rotation={[0, facing(x, z), 0]} scale={MODEL_SCALE}>
+      {props.children}
+    </group>
+  );
+}
+
+/** Drops a model onto its spot and anchors the hover label above its roof. */
+function Placed({ id, at, placement, theme, auto, logo, logoSize = 0.95, children }: PlacedProps) {
+  const [x, z] = at;
+  const top = useRef(2);
+  useEffect(() => () => clearHover(id), [id]);
   const text = hoverText(placement);
   const over = (event: ThreeEvent<PointerEvent>) => {
     event.stopPropagation();
-    const top = (height ?? 2) + (hasSign ? logoSignHeight(logoSize) : auto ? 0.65 : 0) + 0.3;
-    setHover({ id, ...text, anchor: [x, top * MODEL_SCALE, z] });
+    setHover({ id, ...text, anchor: [x, top.current * MODEL_SCALE, z] });
   };
   const out = (event: ThreeEvent<PointerEvent>) => {
     event.stopPropagation();
     clearHover(id);
   };
   return (
-    <group position={[x, 0, z]} rotation={[0, facing(x, z), 0]} scale={MODEL_SCALE}>
+    <OnSpot at={at}>
       <Drop>
-        <group ref={content} onPointerOver={over} onPointerOut={out}>
+        <Signed
+          stage={STAGE}
+          theme={theme}
+          auto={auto}
+          logo={logo}
+          logoSize={logoSize}
+          onMeasure={(height, hasSign) => {
+            top.current = height + (hasSign ? logoSignHeight(logoSize) : auto ? 0.65 : 0) + 0.3;
+          }}
+          onPointerOver={over}
+          onPointerOut={out}
+        >
           {children}
-          {logo && hasSign && height !== null ? (
-            <LogoSign of={logo} position={[0, height - 0.05, 0]} size={logoSize} auto={auto} />
-          ) : null}
-        </group>
-        {auto && !hasSign && height !== null ? <AutoFlag y={height} /> : null}
+        </Signed>
       </Drop>
-    </group>
+    </OnSpot>
   );
 }
 
@@ -124,6 +180,7 @@ function SlotPlacement(props: {
     case "notNeeded":
       return (
         <Placed
+          theme={theme}
           key="not-needed"
           id={`${slot.id}:not-needed`}
           at={lot}
@@ -139,6 +196,7 @@ function SlotPlacement(props: {
       const Model = buildingFor(slot.id, optionId);
       return (
         <Placed
+          theme={theme}
           key={optionId}
           id={`${slot.id}:${optionId}`}
           at={lot}
@@ -154,6 +212,7 @@ function SlotPlacement(props: {
       const name = projectNameFrom(placement, props.projectName);
       return (
         <Placed
+          theme={theme}
           key={name}
           id={`${slot.id}:${name}`}
           at={lot}
@@ -167,7 +226,7 @@ function SlotPlacement(props: {
     case "paint":
       // Always the agent's `decide` (see TOWN.md), so no "auto" flag.
       return (
-        <Placed id={slot.id} at={lot} placement={placement} auto={false}>
+        <Placed theme={theme} id={slot.id} at={lot} placement={placement} auto={false}>
           <PaintFountain stage={STAGE} theme={theme} />
         </Placed>
       );
@@ -179,13 +238,14 @@ function SlotPlacement(props: {
             const label = placement.labels[index] ?? optionId;
             return (
               <Placed
+                theme={theme}
                 key={optionId}
                 id={`${slot.id}:${optionId}`}
                 at={propSpot(slot.id, optionId, index)}
                 placement={{ ...placement, optionIds: [optionId], labels: [label] }}
                 auto={placement.auto}
                 logo={`${slot.id}:${optionId}`}
-                logoSize={slot.id === "authMethods" ? 0.5 : 0.7}
+                logoSize={propLogoSize(slot.id)}
               >
                 <Model label={label} stage={STAGE} theme={theme} />
               </Placed>

@@ -1,6 +1,6 @@
 // Pure helpers for the page, kept free of React and three.js so they can be tested.
 import { SLOTS, slotById, type SlotDef, type SlotId } from "../../src/town/catalog.ts";
-import type { Placement } from "../../src/town/protocol.ts";
+import type { Placement, TownState } from "../../src/town/protocol.ts";
 
 /** Radius of the island's flat top, in world units. Every lot fits inside it. */
 export const ISLAND_RADIUS = 14;
@@ -325,4 +325,63 @@ export function hoverText(placement: Placement): { title: string; detail: string
     title: `${slotById(placement.slot).label}: ${chosen.join(", ")}`,
     detail: placement.reason ?? (placement.auto ? "Picked automatically" : null),
   };
+}
+
+/** How long the agent can be silent, with nothing for the user to answer, before the
+ * page says it is probably waiting in the terminal (e.g. on a permission prompt). */
+export const TERMINAL_SIGN_AFTER_MS = 30_000;
+
+/** The plan is on the billboard, waiting for Build it or Change something. */
+export function isPlanWaiting(state: TownState): boolean {
+  return state.phase === "plan" && state.plan !== null;
+}
+
+/** True when the agent has gone quiet with nothing to answer on the page. */
+export function showTerminalSign(state: TownState, now: number): boolean {
+  return (
+    state.pending === null &&
+    !isPlanWaiting(state) &&
+    state.phase !== "done" &&
+    !state.agentStopped &&
+    now - state.lastAgentActivity > TERMINAL_SIGN_AFTER_MS
+  );
+}
+
+/** The agent is working out the next interview question: the crane swings. */
+export function isThinking(state: TownState): boolean {
+  return state.pending === null && state.phase === "interview" && !state.agentStopped;
+}
+
+/** The first slot nobody has settled yet, where the crane waits. A slot settled as
+ * "not needed" counts as settled, so the crane never waits on a lot nobody will fill. */
+export function nextLot(state: TownState): SlotId | null {
+  return SLOTS.find((slot) => state.placements[slot.id] === undefined)?.id ?? null;
+}
+
+/** Which card the billboard shows. The plan comes before any question; the plan and
+ * report cards come with the build progress. */
+export type BillboardCard = "question" | "plan" | "report";
+
+export function billboardCard(state: TownState): BillboardCard | null {
+  // The report stays up after the user quits the agent.
+  if (state.phase === "done" && state.report) return "report";
+  if (state.agentStopped) return null;
+  if (isPlanWaiting(state)) return "plan";
+  if (state.pending) return "question";
+  return null;
+}
+
+/** How far outside its lot's square the crane's mast stands. */
+const CRANE_GAP = 0.35;
+
+/** Where the thinking crane stands for `slot`'s lot: its mast just off the lot on the
+ * side facing the town centre (so it stays clear of the trees on the shore), turned by
+ * `yaw` round y so its jib (local +x) reaches `reach` out to the lot's centre. */
+export function craneSpot(slot: SlotId): { x: number; z: number; yaw: number; reach: number } {
+  const [lx, lz] = slotById(slot).lot;
+  const length = Math.hypot(lx, lz);
+  // From the mast to the lot: outward from the centre (the central lot leans one way).
+  const [dx, dz] = length === 0 ? [-Math.SQRT1_2, -Math.SQRT1_2] : [lx / length, lz / length];
+  const reach = (LOT_SIZE / 2 + CRANE_GAP) / Math.max(Math.abs(dx), Math.abs(dz));
+  return { x: lx - dx * reach, z: lz - dz * reach, yaw: Math.atan2(-dz, dx), reach };
 }
