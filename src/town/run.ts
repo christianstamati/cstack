@@ -1,4 +1,5 @@
 // Town mode: serve the page, open it, run the agent against the MCP server.
+import type { ChildProcess } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -61,25 +62,26 @@ export async function runTown(input: {
   });
 
   console.log(`Your town: ${server.url}`);
-  if (options.askEverything) {
-    console.log("The agent will ask before every command.");
-  } else if (launch.allowed.length > 0) {
-    console.log(
-      `Allowed without asking in this session: ${launch.allowed.join(", ")}. Anything else asks in this terminal.`,
-    );
-    if (launch.allowed.some((entry) => entry.startsWith("npx") || entry.startsWith("bunx"))) {
-      console.log("npx and bunx let the agent download and run npm packages without asking.");
-    }
+  for (const line of launch.summary) {
+    console.log(line);
   }
   if (options.open && !(await openBrowser(server.url))) {
     console.log("Couldn't open a browser. Open the URL above.");
   }
 
-  let closing: Promise<void> | undefined;
-  const closeServer = () => (closing ??= server.close());
-  const onSignal = () => void closeServer();
-  process.once("SIGINT", onSignal);
-  process.once("SIGTERM", onSignal);
+  // Ctrl-C reaches the whole foreground process group; the agent decides what it
+  // means (it cancels a turn), so the CLI only keeps itself alive and cleans up
+  // after the agent exits. SIGTERM/SIGHUP are forwarded so `kill <cli>` ends the agent.
+  let child: ChildProcess | undefined;
+  const ignore = () => {};
+  const forward = (signal: NodeJS.Signals) => () => {
+    child?.kill(signal);
+  };
+  const onTerm = forward("SIGTERM");
+  const onHup = forward("SIGHUP");
+  process.on("SIGINT", ignore);
+  process.on("SIGTERM", onTerm);
+  process.on("SIGHUP", onHup);
   try {
     return await runAgent({
       command: input.agent.id,
@@ -91,11 +93,15 @@ export async function runTown(input: {
       ],
       env: launch.env,
       cwd: input.projectDir,
+      onSpawn: (spawned) => {
+        child = spawned;
+      },
     });
   } finally {
-    process.off("SIGINT", onSignal);
-    process.off("SIGTERM", onSignal);
+    process.off("SIGINT", ignore);
+    process.off("SIGTERM", onTerm);
+    process.off("SIGHUP", onHup);
     store.agentStopped();
-    await closeServer();
+    await server.close();
   }
 }

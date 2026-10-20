@@ -42,14 +42,27 @@ const MCP_TOOLS = ["ask", "decide", "plan", "progress", "report", "status"];
 const TOOL_TIMEOUT_MS = 24 * 60 * 60 * 1000;
 const DOWNLOADS_PACKAGES = new Set(["npx", "bunx"]);
 
+export interface TownLaunch {
+  args: string[];
+  env: Record<string, string>;
+  /** Tools the agent may run without asking (Claude only). */
+  allowed: string[];
+  /** True when the agent can download and run npm packages without asking. */
+  runsPackages: boolean;
+  /** Plain-words startup message about what runs without asking. */
+  summary: string[];
+}
+
+const PACKAGES_WARNING = "npx and bunx let the agent download and run npm packages without asking.";
+
 export function townLaunch(
   agent: AgentId,
   input: { mcpUrl: string; askEverything: boolean },
-): { args: string[]; env: Record<string, string>; allowed: string[] } {
+): TownLaunch {
   return agent === "claude" ? claudeLaunch(input) : codexLaunch(input);
 }
 
-function claudeLaunch(input: { mcpUrl: string; askEverything: boolean }) {
+function claudeLaunch(input: { mcpUrl: string; askEverything: boolean }): TownLaunch {
   const mcpConfig = JSON.stringify({
     mcpServers: { cstack: { type: "http", url: input.mcpUrl } },
   });
@@ -57,6 +70,11 @@ function claudeLaunch(input: { mcpUrl: string; askEverything: boolean }) {
   if (!input.askEverything) {
     rules.push(...ALLOWED_COMMANDS.map((command) => `Bash(${command} *)`));
   }
+  const allowed = input.askEverything
+    ? []
+    : ALLOWED_COMMANDS.map((command) =>
+        DOWNLOADS_PACKAGES.has(command) ? `${command} (runs any npm package)` : command,
+      );
   return {
     args: [
       "--mcp-config",
@@ -67,15 +85,19 @@ function claudeLaunch(input: { mcpUrl: string; askEverything: boolean }) {
       input.askEverything ? "default" : "acceptEdits",
     ],
     env: { MCP_TOOL_TIMEOUT: String(TOOL_TIMEOUT_MS) },
-    allowed: input.askEverything
-      ? []
-      : ALLOWED_COMMANDS.map((command) =>
-          DOWNLOADS_PACKAGES.has(command) ? `${command} (runs any npm package)` : command,
-        ),
+    allowed,
+    runsPackages: !input.askEverything,
+    summary: input.askEverything
+      ? ["The agent will ask before every command and file edit."]
+      : [
+          `Allowed without asking in this session: ${allowed.join(", ")}. They run with whatever arguments the agent picks.`,
+          "File edits in the project are accepted automatically, and so are basic file commands like mkdir, mv and cp in the project (Claude's accept-edits mode). Anything else asks in this terminal.",
+          PACKAGES_WARNING,
+        ],
   };
 }
 
-function codexLaunch(input: { mcpUrl: string; askEverything: boolean }) {
+function codexLaunch(input: { mcpUrl: string; askEverything: boolean }): TownLaunch {
   return {
     args: [
       "-c",
@@ -90,6 +112,15 @@ function codexLaunch(input: { mcpUrl: string; askEverything: boolean }) {
       input.askEverything ? "untrusted" : "on-request",
     ],
     env: {},
-    allowed: input.askEverything ? [] : ["commands inside the project folder (sandboxed)"],
+    allowed: [],
+    runsPackages: !input.askEverything,
+    summary: input.askEverything
+      ? [
+          "Codex will ask before running commands, except known-safe read-only ones. File edits in the project folder are still accepted automatically.",
+        ]
+      : [
+          "Codex can run any command without asking, with file writes limited to the project folder and network access allowed. Anything outside that asks in this terminal.",
+          PACKAGES_WARNING,
+        ],
   };
 }

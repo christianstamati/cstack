@@ -80,3 +80,37 @@ test("findPackageRoot walks up to the @cstack-dev/town package", () => {
 test("findPackageRoot finds this repo from source", () => {
   expect(findPackageRoot(import.meta.dirname)).toBe(join(import.meta.dirname, ".."));
 });
+
+test("claude's startup summary names the tools and warns about packages", () => {
+  const launch = townLaunch("claude", { mcpUrl: URL_, askEverything: false });
+  const text = launch.summary.join("\n");
+  expect(launch.runsPackages).toBe(true);
+  expect(text).toContain("whatever arguments");
+  expect(text).toContain("mkdir, mv and cp");
+  expect(text).toContain("download and run npm packages");
+  expect(text).not.toMatch(/commands in(side)? the project/);
+});
+
+test("codex warns about packages and describes its policy plainly", () => {
+  const launch = townLaunch("codex", { mcpUrl: URL_, askEverything: false });
+  expect(launch.runsPackages).toBe(true);
+  expect(launch.summary.join("\n")).toContain("any command");
+  expect(launch.summary.join("\n")).toContain("download and run npm packages");
+});
+
+test("--ask-everything wording is accurate per agent", () => {
+  const claude = townLaunch("claude", { mcpUrl: URL_, askEverything: true });
+  const codex = townLaunch("codex", { mcpUrl: URL_, askEverything: true });
+  expect(claude.runsPackages).toBe(false);
+  expect(codex.runsPackages).toBe(false);
+  expect(codex.summary.join("\n")).toContain("known-safe read-only");
+  expect(codex.summary.join("\n")).not.toContain("every command");
+});
+
+test("a slow opener counts as opened instead of blocking", async () => {
+  const started = Date.now();
+  await expect(
+    openBrowser("http://127.0.0.1:1/", ["sh", "-c", "exec sleep 30", "x"]),
+  ).resolves.toBe(true);
+  expect(Date.now() - started).toBeLessThan(5000);
+});

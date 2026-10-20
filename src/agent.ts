@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import { platform } from "node:os";
 import { createInterface } from "node:readline/promises";
 
@@ -55,6 +55,8 @@ export function runAgent(input: {
   readonly args: ReadonlyArray<string>;
   readonly cwd: string;
   readonly env?: Readonly<Record<string, string>>;
+  /** Called with the child right after it spawns (e.g. to forward signals to it). */
+  readonly onSpawn?: (child: ChildProcess) => void;
 }): Promise<number> {
   return new Promise((resolve, reject) => {
     const args = isWindows ? input.args.map(quoteForCmd) : [...input.args];
@@ -64,6 +66,7 @@ export function runAgent(input: {
       stdio: "inherit",
       shell: isWindows,
     });
+    input.onSpawn?.(child);
     child.once("error", reject);
     // Death by signal has no exit code; report it as a failure.
     child.once("exit", (code, signal) => resolve(code ?? (signal === null ? 0 : 1)));

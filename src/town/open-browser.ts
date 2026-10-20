@@ -12,6 +12,10 @@ function defaultOpener(): readonly [string, ...string[]] {
   }
 }
 
+// Some xdg-open setups don't exit until the browser closes, so a launch that is
+// still running after this long counts as opened.
+const QUICK_FAILURE_MS = 2000;
+
 /** Opens `url` in the default browser. Resolves false on any failure; never throws. */
 export function openBrowser(
   url: string,
@@ -21,8 +25,17 @@ export function openBrowser(
     try {
       const [command, ...args] = opener;
       const child = spawn(command, [...args, url], { stdio: "ignore" });
-      child.once("error", () => resolve(false));
-      child.once("exit", (code) => resolve(code === 0));
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const done = (opened: boolean) => {
+        clearTimeout(timer);
+        resolve(opened);
+      };
+      child.once("error", () => done(false));
+      child.once("exit", (code) => done(code === 0));
+      child.once("spawn", () => {
+        child.unref();
+        timer = setTimeout(() => done(true), QUICK_FAILURE_MS);
+      });
     } catch {
       resolve(false);
     }
