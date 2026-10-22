@@ -28,8 +28,8 @@ release. Add a tool name to select part of the graph. For example, run
 
 # This repo
 
-This repo is only the `town` CLI (`@cstack-dev/town`), published to npm and run with
-`npx @cstack-dev/town create <dir>`. Plain TypeScript with no runtime dependencies; `vp pack`
+This repo is only the `create-cstack` CLI, published to npm and run with
+`npx @cstack-dev/create <dir>`. Plain TypeScript with no runtime dependencies; `vp pack`
 bundles `src/index.ts` into `dist/index.mjs`, the published bin, which runs on Node.
 
 - The bootstrap prompt is `.github/BOOTSTRAP.md`. Edit that file, then run
@@ -38,25 +38,3 @@ bundles `src/index.ts` into `dist/index.mjs`, the published bin, which runs on N
 - Placeholders in the prompt (`{{PROJECT_DIR}}`, etc.) are filled by
   `fillBootstrapPrompt` in `src/prompt.ts`; a new placeholder needs a value there.
 - The "cstack defaults" JSON in the prompt must match `defaultConfig` in `src/prompt.ts`.
-
-## Town layout
-
-`town create` opens a 3D page in the browser (town mode); `--terminal` and the automatic
-fallback keep the plain text interview.
-
-- `src/town/` is the Node side: `server.ts` (local HTTP server, token in the URL, events
-  and answers), `mcp.ts` (the `cstack` MCP tools), `store.ts` (session state),
-  `launch.ts` (per-agent flags and permission policy), `run.ts`, `fallback.ts`.
-  `src/create.ts` loads `./town/run.ts` only through a dynamic `import()`, so the text
-  path never loads the server or the MCP SDK. Keep it that way: `dist/index.mjs` must not
-  contain `@modelcontextprotocol` or `three`.
-- `ui/` is the React Three Fiber page with its own `tsconfig.json` and `vite.config.ts`.
-  It builds into `dist/ui`. `src/town/protocol.ts` is shared by both sides, so it must not
-  import Node modules.
-- The town-mode prompt is `.github/TOWN.md`. Same rule as the bootstrap prompt: edit that
-  file, then run `bun run sync-prompt` to regenerate `src/town-prompt.ts`.
-- `build` is `vp pack && vp run build:ui` (pack cleans `dist/`, so the page is built
-  after it). `bun scripts/check-pack-size.ts` fails if the npm tarball is over 3 MB;
-  `prepublishOnly` runs it.
-- `package.json` keeps no runtime `dependencies`: the MCP SDK, zod, React and three are
-  devDependencies bundled into the output.

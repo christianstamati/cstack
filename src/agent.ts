@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from "node:child_process";
+import { spawn } from "node:child_process";
 import { platform } from "node:os";
 import { createInterface } from "node:readline/promises";
 
@@ -43,28 +43,6 @@ export async function ask(question: string): Promise<string> {
   }
 }
 
-/**
- * The agent's arguments: the town's flags, the model, the user's flags (after `--` on our
- * command line), then the launch prompt after an end-of-options `--`, so a user flag that
- * takes several values (`--allowedTools`, codex's `--image`) can't swallow the prompt. Both
- * CLIs take `--` (claude's commander and codex's clap parsers).
- */
-export function agentCommandLine(input: {
-  readonly launchArgs?: ReadonlyArray<string>;
-  readonly model?: string;
-  readonly agentArgs: ReadonlyArray<string>;
-  readonly prompt: string;
-}): string[] {
-  return [
-    ...(input.launchArgs ?? []),
-    ...(input.model === undefined ? [] : ["--model", input.model]),
-    ...input.agentArgs,
-    // A second `--` would itself become a positional argument.
-    ...(input.agentArgs.includes("--") ? [] : ["--"]),
-    input.prompt,
-  ];
-}
-
 const isWindows = platform() === "win32";
 
 // cmd.exe splits unquoted arguments on spaces; the agent CLIs are `.cmd` shims there.
@@ -76,19 +54,14 @@ export function runAgent(input: {
   readonly command: string;
   readonly args: ReadonlyArray<string>;
   readonly cwd: string;
-  readonly env?: Readonly<Record<string, string>>;
-  /** Called with the child right after it spawns (e.g. to forward signals to it). */
-  readonly onSpawn?: (child: ChildProcess) => void;
 }): Promise<number> {
   return new Promise((resolve, reject) => {
     const args = isWindows ? input.args.map(quoteForCmd) : [...input.args];
     const child = spawn(input.command, args, {
       cwd: input.cwd,
-      env: { ...process.env, ...input.env },
       stdio: "inherit",
       shell: isWindows,
     });
-    input.onSpawn?.(child);
     child.once("error", reject);
     // Death by signal has no exit code; report it as a failure.
     child.once("exit", (code, signal) => resolve(code ?? (signal === null ? 0 : 1)));

@@ -3,35 +3,20 @@ import { parseArgs } from "node:util";
 export const AGENT_IDS = ["claude", "codex"] as const;
 export type AgentId = (typeof AGENT_IDS)[number];
 
-export type Command = "create" | "help";
-
 export interface CliOptions {
-  readonly command: Command;
-  // Set when help was asked for a specific command, e.g. `town create --help`.
-  readonly helpFor?: "create";
-  readonly dir?: string;
-  readonly agent?: AgentId;
-  readonly model?: string;
-  readonly config?: string;
+  readonly dir: string | undefined;
+  readonly agent: AgentId | undefined;
+  readonly model: string | undefined;
+  readonly config: string | undefined;
   readonly defaults: boolean;
-  readonly terminal: boolean;
-  readonly open: boolean;
-  readonly askEverything: boolean;
+  readonly help: boolean;
   // Everything after `--`, passed to the agent CLI as is.
   readonly agentArgs: ReadonlyArray<string>;
 }
 
-export const USAGE = `Usage: town <command> [options]
+export const USAGE = `Usage: create-cstack [project-dir] [options] [-- agent args]
 
-Commands:
-  create <dir>      Create a project and build it with Claude Code or Codex.
-  update            (coming later)
-
-Run \`town create --help\` for the create options.`;
-
-export const CREATE_USAGE = `Usage: town create <dir> [options] [-- agent args]
-
-Creates dir, writes the cstack bootstrap prompt into it, and starts
+Creates project-dir, writes the cstack bootstrap prompt into it, and starts
 Claude Code or Codex there to interview you and build the project.
 
 Options:
@@ -39,9 +24,6 @@ Options:
   --model <name>          Model passed through to the agent CLI.
   --defaults              Skip the interview and use the cstack defaults.
   --config <file>         Reuse a saved .cstack/config.json.
-  --terminal              Use the text interview in the terminal instead of the 3D town.
-  --no-open               Start the town and print its URL, but don't open the browser.
-  --ask-everything        Keep the agent's permission prompts instead of the town's allowlist.
   -h, --help              Show this help.
 
 Arguments after -- go to the agent CLI, e.g. -- --permission-mode acceptEdits`;
@@ -64,9 +46,6 @@ export function parseCliArgs(argv: ReadonlyArray<string>): CliOptions {
         model: { type: "string" },
         config: { type: "string" },
         defaults: { type: "boolean", default: false },
-        terminal: { type: "boolean", default: false },
-        "no-open": { type: "boolean", default: false },
-        "ask-everything": { type: "boolean", default: false },
         help: { type: "boolean", short: "h", default: false },
       },
     });
@@ -75,24 +54,8 @@ export function parseCliArgs(argv: ReadonlyArray<string>): CliOptions {
   }
 
   const { values, positionals } = parsed;
-  const [name, ...rest] = positionals;
-  if (name === undefined) {
-    if (values.help || argv.length === 0) {
-      return baseOptions("help");
-    }
-    throw new UsageError("Missing command. Try: town create <dir>");
-  }
-  if (name === "update") {
-    throw new UsageError("town update is coming in a later version. For now: town create <dir>");
-  }
-  if (name !== "create") {
-    throw new UsageError(`Unknown command: ${name}`);
-  }
-  if (values.help) {
-    return { ...baseOptions("help"), helpFor: "create", dir: undefined };
-  }
-  if (rest.length > 1) {
-    throw new UsageError(`Expected one project directory, got: ${rest.join(" ")}`);
+  if (positionals.length > 1) {
+    throw new UsageError(`Expected one project directory, got: ${positionals.join(" ")}`);
   }
   const agent = values.agent;
   if (agent !== undefined && !isAgentId(agent)) {
@@ -103,28 +66,14 @@ export function parseCliArgs(argv: ReadonlyArray<string>): CliOptions {
   }
 
   return {
-    command: "create",
-    dir: rest[0],
+    dir: positionals[0],
     agent,
     model: values.model,
     config: values.config,
     defaults: values.defaults,
-    terminal: values.terminal,
-    open: !values["no-open"],
-    askEverything: values["ask-everything"],
+    help: values.help,
     agentArgs,
   };
-
-  function baseOptions(command: Command): CliOptions {
-    return {
-      command,
-      defaults: false,
-      terminal: false,
-      open: true,
-      askEverything: false,
-      agentArgs,
-    };
-  }
 }
 
 function isAgentId(value: string): value is AgentId {
