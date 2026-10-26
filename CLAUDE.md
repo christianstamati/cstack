@@ -29,7 +29,7 @@ release. Add a tool name to select part of the graph. For example, run
 # This repo
 
 This repo is only the `create-cstack` CLI, published to npm and run with
-`npx @cstack-dev/create <dir>`. Plain TypeScript with no runtime dependencies; `vp pack`
+`npx @cstackjs/create <dir>`. Plain TypeScript with no runtime dependencies; `vp pack`
 bundles `src/index.ts` into `dist/index.mjs`, the published bin, which runs on Node.
 
 - The bootstrap prompt is `.github/BOOTSTRAP.md`. Edit that file, then run

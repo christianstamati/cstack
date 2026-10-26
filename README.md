@@ -7,11 +7,11 @@ data layer, auth, deploy target, UI styling), shows a plan, and builds the proje
 after you approve it, using each tool's official generator.
 
 ```bash
-npx @cstack-dev/create my-app
+npx @cstackjs/create my-app
 ```
 
-`npm create @cstack-dev my-app`, `pnpm create @cstack-dev my-app` and
-`bunx @cstack-dev/create my-app` do the same. Any of them asks which agent to use when both
+`npm create @cstackjs my-app`, `pnpm create @cstackjs my-app` and
+`bunx @cstackjs/create my-app` do the same. Any of them asks which agent to use when both
 are installed:
 
 ```

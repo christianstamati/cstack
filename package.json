@@ -1,5 +1,5 @@
 {
-  "name": "@cstack-dev/create",
+  "name": "@cstackjs/create",
   "version": "1.0.0",
   "description": "Bootstrap a full-stack TypeScript project with Claude Code or Codex",
   "keywords": [
