@@ -1,17 +1,17 @@
-# cstack
+# cs-stack
 
-`create-cstack` starts a new full-stack TypeScript project by handing the setup to
+`create-cs-stack` starts a new full-stack TypeScript project by handing the setup to
 Claude Code or Codex. It creates the project folder, writes a bootstrap prompt into it,
 and opens the agent there. The agent interviews you (structure, toolchain, framework,
 data layer, auth, deploy target, UI styling), shows a plan, and builds the project only
 after you approve it, using each tool's official generator.
 
 ```bash
-npx @cstackjs/create my-app
+npx @cs-stack/create my-app
 ```
 
-`npm create @cstackjs my-app`, `pnpm create @cstackjs my-app` and
-`bunx @cstackjs/create my-app` do the same. Any of them asks which agent to use when both
+`npm create @cs-stack my-app`, `pnpm create @cs-stack my-app` and
+`bunx @cs-stack/create my-app` do the same. Any of them asks which agent to use when both
 are installed:
 
 ```
@@ -27,11 +27,11 @@ Bootstrap with:
 | ----------------------- | ------------------------------------------------------------------------------------ |
 | `--agent claude\|codex` | Agent to use. Without it, the CLI asks when both are installed                       |
 | `--model <name>`        | Model passed through to the agent CLI                                                |
-| `--defaults`            | Skip the interview and go straight to the plan with the cstack defaults              |
+| `--defaults`            | Skip the interview and go straight to the plan with the cs-stack defaults            |
 | `--config <file>`       | Reuse a `config.json` saved by an earlier run                                        |
 | `-- <args>`             | Everything after `--` goes to the agent CLI, e.g. `-- --permission-mode acceptEdits` |
 
-The cstack defaults: a Vite+ monorepo on Bun, TanStack Start, Convex with Convex Auth
+The cs-stack defaults: a Vite+ monorepo on Bun, TanStack Start, Convex with Convex Auth
 v2 and Google sign-in, shadcn/ui on Base UI, Vercel, plus an example feature, CI, tests
 and agent docs.
 
@@ -40,8 +40,8 @@ and agent docs.
 1. The CLI checks the folder name is kebab-case and the folder is new or empty.
 2. It records machine facts: OS and which of git, gh, node, bun, pnpm, npm, yarn,
    docker, claude and codex are installed.
-3. It writes `.cstack/BOOTSTRAP.md` (the prompt with those facts filled in) and, with
-   `--defaults` or `--config`, `.cstack/config.json`.
+3. It writes `.cs-stack/BOOTSTRAP.md` (the prompt with those facts filled in) and, with
+   `--defaults` or `--config`, `.cs-stack/config.json`.
 4. It starts the agent in the new folder with a one-line instruction to read that file.
    If neither agent is installed, it prints the file's path so you can paste it into
    any agent.
@@ -65,7 +65,7 @@ in `src/bootstrap-prompt.ts`, which is generated. After editing the Markdown fil
 bun run sync-prompt
 ```
 
-`vp test` fails if the two differ, or if the "cstack defaults" JSON in the prompt
+`vp test` fails if the two differ, or if the "cs-stack defaults" JSON in the prompt
 doesn't match what `--defaults` writes (`src/prompt.ts`).
 
 ## Development

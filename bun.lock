@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "create-cstack",
+      "name": "@cs-stack/create",
       "devDependencies": {
         "@types/bun": "^1.4.3",
         "vite": "npm:@voidzero-dev/vite-plus-core@1.2.0",

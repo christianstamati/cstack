@@ -14,16 +14,16 @@ export interface CliOptions {
   readonly agentArgs: ReadonlyArray<string>;
 }
 
-export const USAGE = `Usage: create-cstack [project-dir] [options] [-- agent args]
+export const USAGE = `Usage: create-cs-stack [project-dir] [options] [-- agent args]
 
-Creates project-dir, writes the cstack bootstrap prompt into it, and starts
+Creates project-dir, writes the cs-stack bootstrap prompt into it, and starts
 Claude Code or Codex there to interview you and build the project.
 
 Options:
   --agent <claude|codex>  Agent CLI to use. Default: ask when both are installed.
   --model <name>          Model passed through to the agent CLI.
-  --defaults              Skip the interview and use the cstack defaults.
-  --config <file>         Reuse a saved .cstack/config.json.
+  --defaults              Skip the interview and use the cs-stack defaults.
+  --config <file>         Reuse a saved .cs-stack/config.json.
   -h, --help              Show this help.
 
 Arguments after -- go to the agent CLI, e.g. -- --permission-mode acceptEdits`;

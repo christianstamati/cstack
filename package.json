@@ -1,5 +1,5 @@
 {
-  "name": "@cstackjs/create",
+  "name": "@cs-stack/create",
   "version": "1.0.1",
   "description": "Bootstrap a full-stack TypeScript project with Claude Code or Codex",
   "keywords": [
@@ -10,17 +10,17 @@
     "scaffold",
     "typescript"
   ],
-  "homepage": "https://github.com/christianstamati/cstack#readme",
+  "homepage": "https://github.com/christianstamati/cs-stack#readme",
   "bugs": {
-    "url": "https://github.com/christianstamati/cstack/issues"
+    "url": "https://github.com/christianstamati/cs-stack/issues"
   },
   "author": "Christian Stamati",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/christianstamati/cstack.git"
+    "url": "git+https://github.com/christianstamati/cs-stack.git"
   },
   "bin": {
-    "create-cstack": "dist/index.mjs"
+    "create-cs-stack": "dist/index.mjs"
   },
   "files": [
     "dist"

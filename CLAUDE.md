@@ -28,8 +28,8 @@ release. Add a tool name to select part of the graph. For example, run
 
 # This repo
 
-This repo is only the `create-cstack` CLI, published to npm and run with
-`npx @cstackjs/create <dir>`. Plain TypeScript with no runtime dependencies; `vp pack`
+This repo is only the `create-cs-stack` CLI, published to npm and run with
+`npx @cs-stack/create <dir>`. Plain TypeScript with no runtime dependencies; `vp pack`
 bundles `src/index.ts` into `dist/index.mjs`, the published bin, which runs on Node.
 
 - The bootstrap prompt is `.github/BOOTSTRAP.md`. Edit that file, then run
@@ -37,4 +37,4 @@ bundles `src/index.ts` into `dist/index.mjs`, the published bin, which runs on N
   generated file by hand.
 - Placeholders in the prompt (`{{PROJECT_DIR}}`, etc.) are filled by
   `fillBootstrapPrompt` in `src/prompt.ts`; a new placeholder needs a value there.
-- The "cstack defaults" JSON in the prompt must match `defaultConfig` in `src/prompt.ts`.
+- The "cs-stack defaults" JSON in the prompt must match `defaultConfig` in `src/prompt.ts`.

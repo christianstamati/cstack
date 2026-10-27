@@ -10,13 +10,13 @@ export interface PromptFacts {
 }
 
 // Where the CLI writes the filled prompt, relative to the project folder.
-export const BOOTSTRAP_PATH = ".cstack/BOOTSTRAP.md";
-export const CONFIG_PATH = ".cstack/config.json";
+export const BOOTSTRAP_PATH = ".cs-stack/BOOTSTRAP.md";
+export const CONFIG_PATH = ".cs-stack/config.json";
 
 // The agent gets a one-line pointer instead of the whole prompt: Windows `.cmd` shims
 // run through cmd.exe, which can't carry a multiline argument, and with no agent
 // installed the file is what the user pastes by hand.
-export const LAUNCH_PROMPT = `Read the file "${BOOTSTRAP_PATH}" and follow it exactly: it is your cstack bootstrap prompt.`;
+export const LAUNCH_PROMPT = `Read the file "${BOOTSTRAP_PATH}" and follow it exactly: it is your cs-stack bootstrap prompt.`;
 
 export function fillBootstrapPrompt(facts: PromptFacts): string {
   const values: Record<string, string> = {
@@ -37,7 +37,7 @@ export function fillBootstrapPrompt(facts: PromptFacts): string {
   return filled;
 }
 
-// Matches the "cstack defaults" section of the prompt; `--defaults` writes it.
+// Matches the "cs-stack defaults" section of the prompt; `--defaults` writes it.
 export function defaultConfig(name: string) {
   return {
     name,

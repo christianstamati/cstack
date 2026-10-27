@@ -30,7 +30,7 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
   let dir = options.dir;
   if (dir === undefined) {
     if (!interactive) {
-      throw new UsageError("Pass the project directory, e.g. create-cstack my-app");
+      throw new UsageError("Pass the project directory, e.g. create-cs-stack my-app");
     }
     dir = (await ask("Project name (my-app): ")) || "my-app";
   }
@@ -47,7 +47,7 @@ async function main(argv: ReadonlyArray<string>): Promise<number> {
   const installed = AGENTS.filter((agent) => tools[agent.id] !== null);
   const agent = await chooseAgent(options, installed, interactive);
 
-  mkdirSync(join(projectDir, ".cstack"), { recursive: true });
+  mkdirSync(join(projectDir, ".cs-stack"), { recursive: true });
   const promptPath = join(projectDir, BOOTSTRAP_PATH);
   writeFileSync(
     promptPath,

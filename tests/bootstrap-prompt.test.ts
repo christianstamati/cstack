@@ -31,7 +31,7 @@ test("filling the prompt replaces every placeholder", () => {
 
 test("the defaults in the prompt match what --defaults writes", () => {
   const filled = fillBootstrapPrompt(facts);
-  const section = filled.split("## cstack defaults")[1] ?? "";
+  const section = filled.split("## cs-stack defaults")[1] ?? "";
   const json = /```json\n([\s\S]*?)\n```/.exec(section)?.[1];
   expect(json).toBeDefined();
   expect(JSON.parse(json ?? "")).toEqual(defaultConfig("my-app"));
